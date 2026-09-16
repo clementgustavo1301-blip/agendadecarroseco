@@ -22,6 +22,29 @@ import { setupProfilePage } from './pages/profilePage.js';
 
 let paginaAtual = 'painel';
 
+function menuEstaAberto() {
+  return document.querySelector('.sidebar')?.classList.contains('aberta');
+}
+
+function atualizarMenuMobile(aberto) {
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  const botaoMenu = document.getElementById('btn-menu');
+
+  if (!sidebar || !overlay || !botaoMenu) return;
+
+  sidebar.classList.toggle('aberta', aberto);
+  overlay.classList.toggle('ativa', aberto);
+  overlay.setAttribute('aria-hidden', String(!aberto));
+  botaoMenu.setAttribute('aria-expanded', String(aberto));
+  botaoMenu.setAttribute('aria-label', aberto ? 'Fechar menu de navegacao' : 'Abrir menu de navegacao');
+  document.body.classList.toggle('menu-mobile-aberto', aberto);
+}
+
+function fecharMenuMobile() {
+  atualizarMenuMobile(false);
+}
+
 /* ============================================================
    TEMA CLARO / ESCURO
 ============================================================ */
@@ -69,6 +92,7 @@ export async function irPara(pagina) {
   }
 
   paginaAtual = pagina;
+  fecharMenuMobile();
 
   document.querySelectorAll('.nav-item').forEach(el => {
     el.classList.toggle('ativo', el.dataset.pagina === pagina);
@@ -90,6 +114,9 @@ export async function irPara(pagina) {
       tituloEl.textContent = TITULOS_PAGINAS[pagina] || pagina;
     }
   }
+
+  const btnFecharTela = document.getElementById('btn-fechar-tela');
+  if (btnFecharTela) btnFecharTela.hidden = pagina === 'painel';
 
   if (pagina === 'painel') {
     await renderPainel({
@@ -198,6 +225,20 @@ async function init() {
 
   // Botão sair
   document.getElementById('btn-sair').onclick = sair;
+
+  const btnMenu = document.getElementById('btn-menu');
+  const sidebarOverlay = document.getElementById('sidebar-overlay');
+  if (btnMenu) btnMenu.onclick = () => atualizarMenuMobile(!menuEstaAberto());
+  if (sidebarOverlay) sidebarOverlay.onclick = fecharMenuMobile;
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && menuEstaAberto()) fecharMenuMobile();
+  });
+  window.addEventListener('resize', () => {
+    if (window.innerWidth >= 768) fecharMenuMobile();
+  });
+
+  document.getElementById('btn-fechar-tela').onclick = () => irPara('painel');
 
   // Navegação na Sidebar
   document.querySelectorAll('.nav-item[data-pagina]').forEach(item => {
