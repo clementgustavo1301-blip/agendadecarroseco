@@ -1,0 +1,227 @@
+import { supabase } from './supabaseClient.js';
+import { uid } from '../utils/dom.js';
+import { fmtDataHora } from '../utils/dateUtils.js';
+
+class BookingService {
+  async listarAgendamentos() {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select(`
+        *,
+        vehicles(*),
+        driver:profiles!driver_id(*),
+        creator:profiles!created_by_id(*)
+      `)
+      .eq('is_deleted', false);
+
+    if (error) {
+      console.error('Erro ao listar agendamentos:', error);
+      return [];
+    }
+
+    // Buscar os checklists associados
+    const { data: checklists } = await supabase.from('checklists').select('*');
+
+    return data.map(b => {
+      const bChecklists = checklists ? checklists.filter(c => c.booking_id === b.id) : [];
+      const saida = bChecklists.find(c => c.type === 'saida');
+      const chegada = bChecklists.find(c => c.type === 'devolucao');
+
+      return {
+        id: b.id,
+        usuarioId: b.driver_id,
+        carroId: b.vehicle_id,
+        inicio: b.start_time,
+        fim: b.end_time,
+        itinerario: b.route_itinerary,
+        objetivo: b.purpose,
+        observacao: b.notes,
+        criadoPorId: b.created_by_id,
+        criadoEm: b.created_at,
+        excluido: b.is_deleted,
+        checklistSaida: saida ? {
+          km: saida.odometer_km,
+          combustivel: saida.fuel,
+          avarias: saida.has_damages,
+          avariasObs: saida.damages_description,
+          pneus: saida.tires_ok,
+          documentos: saida.documents_ok,
+          kitSeguranca: saida.safety_kit_ok,
+          luzes: saida.lights_ok
+        } : null,
+        checklistChegada: chegada ? {
+          km: chegada.odometer_km,
+          combustivel: chegada.fuel,
+          avarias: chegada.has_damages,
+          avariasObs: chegada.damages_description,
+          pneus: chegada.tires_ok,
+          documentos: chegada.documents_ok,
+          kitSeguranca: chegada.safety_kit_ok,
+          luzes: chegada.lights_ok
+        } : null
+      };
+    });
+  }
+
+  async obterAgendamentoPorId(id) {
+    const schedules = await this.listarAgendamentos();
+    return schedules.find(s => s.id === id) || null;
+  }
+
+  async existeConflito(carroId, inicioDate, fimDate, excluirId = null) {
+    // Na nova arquitetura, o PostgreSQL tem um TRIGGER que impede o conflito (fn_prevent_booking_conflict)
+    // Mas podemos verificar preventivamente no frontend também.
+    const schedules = await this.listarAgendamentos();
+    return schedules.some(s => {
+      if (s.excluido) return false;
+      if (s.carroId !== carroId) return false;
+      if (excluirId && s.id === excluirId) return false;
+      const sInicio = new Date(s.inicio);
+      const sFim = new Date(s.fim);
+      return sInicio < fimDate && sFim > inicioDate;
+    });
+  }
+
+  podeEditarOuExcluir(agendamento, currentUser) {
+    if (!currentUser || !agendamento) return false;
+    return (
+      currentUser.isAdminMestre ||
+      agendamento.criadoPorId === currentUser.id ||
+      agendamento.usuarioId === currentUser.id
+    );
+  }
+
+  async salvarAgendamento(dados, editandoId, currentUser) {
+    const { usuarioId, carroId, inicio, fim, rota, objetivo, obs, checklistSaida } = dados;
+
+    if (!usuarioId || !carroId || !inicio || !fim) {
+      throw new Error('Preencha motorista, veículo, data e horário de início e fim.');
+    }
+    if (fim <= inicio) {
+      throw new Error('A data/horário final deve ser depois do início.');
+    }
+
+    if (!rota) throw new Error('O itinerário é obrigatório.');
+    if (!objetivo) throw new Error('O objetivo da viagem é obrigatório.');
+    
+    if (!editandoId) {
+      if (!checklistSaida || !checklistSaida.km || !checklistSaida.combustivel) {
+        throw new Error('Preencha a quilometragem e o nível de combustível no checklist de saída.');
+      }
+      if (checklistSaida.avarias && !checklistSaida.avariasObs) {
+        throw new Error('Descreva a avaria encontrada no checklist de saída.');
+      }
+    }
+
+    if (editandoId) {
+      // UPDATE Booking
+      const { data, error } = await supabase
+        .from('bookings')
+        .update({
+          driver_id: usuarioId,
+          vehicle_id: carroId,
+          start_time: inicio.toISOString(),
+          end_time: fim.toISOString(),
+          route_itinerary: rota,
+          purpose: objetivo,
+          notes: obs,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', editandoId)
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(error.message || 'Erro ao editar agendamento. Pode haver um conflito de horário.');
+      }
+
+      // Update Checklist (simplificado: não suportado via tela neste momento sem criar rota específica)
+      // Idealmente, usaríamos uma transaction no RPC para atualizar ambos, mas manteremos simples.
+      
+      return data;
+    } else {
+      // INSERT Booking
+      const { data: bookingData, error: bookingError } = await supabase
+        .from('bookings')
+        .insert({
+          vehicle_id: carroId,
+          driver_id: usuarioId,
+          created_by_id: currentUser.id,
+          start_time: inicio.toISOString(),
+          end_time: fim.toISOString(),
+          route_itinerary: rota,
+          purpose: objetivo,
+          notes: obs
+        })
+        .select()
+        .single();
+
+      if (bookingError) {
+        throw new Error(bookingError.message || 'Conflito de agenda: o veículo já possui uma reserva ativa neste período.');
+      }
+
+      // INSERT Checklist Saida
+      const { error: checklistError } = await supabase
+        .from('checklists')
+        .insert({
+          booking_id: bookingData.id,
+          type: 'saida',
+          odometer_km: parseInt(checklistSaida.km, 10),
+          fuel: checklistSaida.combustivel,
+          has_damages: checklistSaida.avarias || false,
+          damages_description: checklistSaida.avariasObs || '',
+          tires_ok: checklistSaida.pneus !== false,
+          documents_ok: checklistSaida.documentos !== false,
+          safety_kit_ok: checklistSaida.kitSeguranca !== false,
+          lights_ok: checklistSaida.luzes !== false,
+          inspected_by_id: currentUser.id
+        });
+
+      if (checklistError) {
+        throw new Error('Agendamento criado, mas falha ao salvar o checklist.');
+      }
+
+      return bookingData;
+    }
+  }
+
+  async excluirAgendamento(id, currentUser) {
+    // Soft delete via is_deleted
+    const { error } = await supabase
+      .from('bookings')
+      .update({
+        is_deleted: true,
+        deleted_by_id: currentUser.id,
+        deleted_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    if (error) {
+      throw new Error('Erro ao excluir (cancelar) o agendamento.');
+    }
+    
+    return true;
+  }
+
+  async salvarChecklist(tipo, agendamentoId, dadosChecklist, currentUser) {
+    const { error } = await supabase
+      .from('checklists')
+      .insert({
+        booking_id: agendamentoId,
+        type: tipo === 'saida' ? 'saida' : 'devolucao',
+        odometer_km: parseInt(dadosChecklist.km, 10),
+        fuel: dadosChecklist.combustivel,
+        has_damages: dadosChecklist.avarias || dadosChecklist.avariaNova || false,
+        damages_description: dadosChecklist.avariasObs || dadosChecklist.avariaNovaObs || '',
+        inspected_by_id: currentUser.id
+      });
+
+    if (error) {
+      throw new Error('Erro ao salvar checklist. Talvez ele já tenha sido preenchido.');
+    }
+
+    return true;
+  }
+}
+
+export const bookingService = new BookingService();

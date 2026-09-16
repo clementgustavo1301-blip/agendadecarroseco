@@ -1,0 +1,271 @@
+import './assets/styles/index.css';
+import { storage } from './services/storage/localStorageAdapter.js';
+import { authService } from './services/authService.js';
+import { STORAGE_KEYS, TITULOS_PAGINAS } from './core/constants.js';
+import { toast } from './components/toast.js';
+
+// Pages
+import { setupLoginPage, setupPasswordChangePage } from './pages/loginPage.js';
+import { renderPainel, abrirSeletorPeriodo } from './pages/dashboardPage.js';
+import {
+  prepararFormularioAgendamento,
+  setupBookingFormPage,
+  popularSelects,
+  iniciarEdicaoAgendamento,
+  checarDisponibilidadeLive
+} from './pages/bookingFormPage.js';
+import { renderAdminAgendamentos } from './pages/bookingsAdminPage.js';
+import { renderCarros, setupFleetPage } from './pages/fleetPage.js';
+import { renderUsuarios, setupUsersPage } from './pages/usersPage.js';
+import { renderRelatorio, setupReportsPage } from './pages/reportsPage.js';
+import { setupProfilePage } from './pages/profilePage.js';
+
+let paginaAtual = 'painel';
+
+/* ============================================================
+   TEMA CLARO / ESCURO
+============================================================ */
+async function carregarTema() {
+  let tema = 'claro';
+  try {
+    const salvo = await storage.get(STORAGE_KEYS.THEME);
+    if (salvo) tema = salvo;
+  } catch (e) {
+    console.warn('Erro ao carregar tema:', e);
+  }
+  aplicarTema(tema);
+}
+
+function aplicarTema(tema) {
+  document.body.classList.toggle('tema-escuro', tema === 'escuro');
+  const icone = tema === 'escuro' ? '☀️' : '🌙';
+  const btnLogin = document.getElementById('btn-tema-login');
+  const btnApp = document.getElementById('btn-tema-app');
+  if (btnLogin) btnLogin.textContent = icone;
+  if (btnApp) btnApp.textContent = icone;
+}
+
+async function alternarTema() {
+  const escuroAtivo = document.body.classList.contains('tema-escuro');
+  const novoTema = escuroAtivo ? 'claro' : 'escuro';
+  aplicarTema(novoTema);
+  try {
+    await storage.set(STORAGE_KEYS.THEME, novoTema);
+  } catch (e) {
+    console.warn('Erro ao salvar tema:', e);
+  }
+}
+
+/* ============================================================
+   NAVEGAÇÃO
+============================================================ */
+export async function irPara(pagina) {
+  const currentUser = authService.getCurrentUser();
+  if (!currentUser) return;
+
+  if ((pagina === 'carros' || pagina === 'usuarios') && !currentUser.isAdmin) {
+    toast('Apenas administradores acessam essa área.', 'erro');
+    pagina = 'painel';
+  }
+
+  paginaAtual = pagina;
+
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('ativo', el.dataset.pagina === pagina);
+  });
+  document.querySelectorAll('.pagina').forEach(el => {
+    el.classList.remove('ativa');
+  });
+
+  const targetEl = document.getElementById('pg-' + pagina);
+  if (targetEl) targetEl.classList.add('ativa');
+
+  const tituloEl = document.getElementById('topo-titulo');
+  if (tituloEl) {
+    if (pagina === 'admin') {
+      tituloEl.textContent = currentUser.isAdmin ? 'Agendamentos' : 'Meus agendamentos';
+    } else if (pagina === 'relatorio') {
+      tituloEl.textContent = currentUser.isAdmin ? 'Relatório' : 'Meu relatório';
+    } else {
+      tituloEl.textContent = TITULOS_PAGINAS[pagina] || pagina;
+    }
+  }
+
+  if (pagina === 'painel') {
+    await renderPainel({
+      onQuickBooking: (carroId, dataISO) => novoAgendamentoRapido(carroId, dataISO),
+      onEditBooking: (id) => iniciarEdicaoAgendamento(id, currentUser, irPara)
+    });
+  } else if (pagina === 'novo') {
+    await popularSelects(currentUser);
+  } else if (pagina === 'relatorio') {
+    const podeVerTudo = currentUser.isAdmin;
+    document.getElementById('rel-usuario-campo').style.display = podeVerTudo ? 'block' : 'none';
+    document.getElementById('rel-sub').textContent = podeVerTudo
+      ? 'Todas as reservas para conferência e auditoria.'
+      : 'Seus agendamentos, para conferência.';
+    await renderRelatorio(currentUser);
+  } else if (pagina === 'admin') {
+    document.getElementById('admin-agend-sub').textContent = currentUser.isAdmin
+      ? 'Aqui estão todas as reservas da frota. Você pode editar ou excluir as que você mesmo agendou; o administrador mestre pode editar ou excluir qualquer uma. Preencha o checklist de saída e devolução de cada viagem sua.'
+      : 'Aqui estão os seus agendamentos. Você pode editar ou excluir os que você mesmo criou ou usa. Preencha o checklist de saída e devolução de cada viagem sua.';
+    await renderAdminAgendamentos(currentUser, {
+      onEditar: (id) => iniciarEdicaoAgendamento(id, currentUser, irPara),
+      onAtualizar: () => irPara('admin')
+    });
+  } else if (pagina === 'carros') {
+    await renderCarros(currentUser, {
+      onAtualizar: async () => {
+        await renderCarros(currentUser, { onAtualizar: () => irPara('carros') });
+        await popularSelects(currentUser);
+      }
+    });
+  } else if (pagina === 'usuarios') {
+    document.getElementById('usr-admin-campo').style.display = currentUser.isAdminMestre ? 'flex' : 'none';
+    await renderUsuarios(currentUser, {
+      onAtualizar: async () => {
+        await renderUsuarios(currentUser, { onAtualizar: () => irPara('usuarios') });
+        await popularSelects(currentUser);
+      }
+    });
+  }
+}
+
+async function novoAgendamentoRapido(carroId, dataISO) {
+  const currentUser = authService.getCurrentUser();
+  await irPara('novo');
+  await prepararFormularioAgendamento(currentUser);
+  document.getElementById('ag-carro').value = carroId;
+  document.getElementById('ag-data-ini').value = dataISO;
+  document.getElementById('ag-data-fim').value = dataISO;
+  await checarDisponibilidadeLive();
+}
+
+async function entrarNoApp(user) {
+  document.getElementById('tela-login').style.display = 'none';
+  document.getElementById('tela-troca-obrigatoria').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+
+  document.getElementById('quem-nome').textContent = user.nome;
+  document.getElementById('quem-tag').innerHTML = user.isAdminMestre
+    ? '<span class="tag-admin">Administrador mestre</span>'
+    : (user.isAdmin ? '<span class="tag-admin">Administrador</span>' : '');
+
+  document.getElementById('nav-usuarios').style.display = user.isAdmin ? 'flex' : 'none';
+  document.getElementById('nav-carros').style.display = user.isAdmin ? 'flex' : 'none';
+  document.getElementById('sep-admin').style.display = user.isAdmin ? 'block' : 'none';
+
+  document.getElementById('nav-admin-label').textContent = user.isAdmin ? 'Agendamentos' : 'Meus agendamentos';
+
+  const agora = new Date();
+  document.getElementById('topo-data').textContent = agora.toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric'
+  });
+
+  await irPara('painel');
+}
+
+function sair() {
+  authService.logout();
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('tela-login').style.display = 'flex';
+  document.getElementById('login-cpf').value = '';
+  document.getElementById('login-senha').value = '';
+  toast('Você saiu do sistema.', 'sucesso');
+}
+
+/* ============================================================
+   INICIALIZAÇÃO DO SISTEMA
+============================================================ */
+async function init() {
+  const seedResult = await storage.initSeed();
+  await carregarTema();
+
+  if (seedResult.isFirstRun) {
+    const seedAviso = document.getElementById('login-seed-aviso');
+    if (seedAviso) {
+      seedAviso.style.display = 'block';
+      seedAviso.textContent = 'Primeiro acesso: CPF 000.000.000-00, senha admin123 (você trocará a senha em seguida).';
+    }
+  }
+
+  // Eventos de tema
+  document.getElementById('btn-tema-login').onclick = alternarTema;
+  document.getElementById('btn-tema-app').onclick = alternarTema;
+
+  // Botão sair
+  document.getElementById('btn-sair').onclick = sair;
+
+  // Navegação na Sidebar
+  document.querySelectorAll('.nav-item[data-pagina]').forEach(item => {
+    item.addEventListener('click', () => {
+      irPara(item.dataset.pagina);
+    });
+  });
+
+  // Seletor de período no dashboard
+  const btnPeriodo = document.getElementById('btn-abrir-seletor-periodo');
+  if (btnPeriodo) {
+    btnPeriodo.onclick = () => {
+      abrirSeletorPeriodo({
+        onPeriodChange: () => {
+          const currentUser = authService.getCurrentUser();
+          renderPainel({
+            onQuickBooking: (cId, dISO) => novoAgendamentoRapido(cId, dISO),
+            onEditBooking: (id) => iniciarEdicaoAgendamento(id, currentUser, irPara)
+          });
+        }
+      });
+    };
+  }
+
+  // Setup de páginas
+  setupLoginPage({
+    onLoginSuccess: (user) => entrarNoApp(user),
+    onRequirePasswordChange: () => {
+      document.getElementById('tela-login').style.display = 'none';
+      document.getElementById('tela-troca-obrigatoria').style.display = 'block';
+    }
+  });
+
+  setupPasswordChangePage({
+    onSuccess: (user) => {
+      toast('Senha definida com sucesso!', 'sucesso');
+      entrarNoApp(user);
+    }
+  });
+
+  setupBookingFormPage({
+    onSaved: () => irPara('painel')
+  });
+
+  setupFleetPage({
+    onAtualizar: async () => {
+      const currentUser = authService.getCurrentUser();
+      await renderCarros(currentUser, { onAtualizar: () => irPara('carros') });
+      await popularSelects(currentUser);
+    }
+  });
+
+  setupUsersPage({
+    onAtualizar: async () => {
+      const currentUser = authService.getCurrentUser();
+      await renderUsuarios(currentUser, { onAtualizar: () => irPara('usuarios') });
+      await popularSelects(currentUser);
+    }
+  });
+
+  setupReportsPage(() => authService.getCurrentUser());
+  setupProfilePage();
+
+  // Finaliza tela de carregamento inicial
+  const telaCarregando = document.getElementById('tela-carregando');
+  if (telaCarregando) {
+    telaCarregando.style.display = 'none';
+  }
+}
+
+window.addEventListener('DOMContentLoaded', init);

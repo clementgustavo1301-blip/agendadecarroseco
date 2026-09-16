@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EcoFrotas | Agendamento Veicular</title>
+  <link rel="icon" type="image/png" href="/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- ================= TELA CARREGANDO ================= -->
+  <div id="tela-carregando" style="position:fixed;inset:0;z-index:3000;background:var(--asfalto);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#fff;">
+    <div style="width:40px;height:40px;border:3px solid rgba(255,255,255,.25);border-top-color:var(--ambar);border-radius:50%;animation:girar 0.8s linear infinite;"></div>
+    <div style="font-family:'Barlow Condensed';font-size:1.15rem;letter-spacing:.3px;">Carregando dados...</div>
+  </div>
+  <style>@keyframes girar{to{transform:rotate(360deg);}}</style>
+
+  <!-- ================= TELA LOGIN ================= -->
+  <div id="tela-login">
+    <div class="login-card">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:-6px;">
+        <button class="theme-toggle" id="btn-tema-login" title="Alternar modo claro/escuro">🌙</button>
+      </div>
+      <div class="login-brand">
+        <img class="logo-img" src="/logo.png" alt="EcoFrotas">
+        <h1>EcoFrotas</h1>
+      </div>
+      <div class="login-sub">Agendamento Veicular</div>
+      <div id="login-erro"></div>
+      <div class="campo">
+        <label for="login-cpf">CPF</label>
+        <input id="login-cpf" placeholder="000.000.000-00" maxlength="14" autocomplete="username">
+      </div>
+      <div class="campo">
+        <label for="login-senha">Senha</label>
+        <input id="login-senha" type="password" placeholder="Sua senha" autocomplete="current-password">
+      </div>
+      <button class="btn btn-primario btn-bloco" id="btn-fazer-login">Entrar</button>
+      <div class="aviso-msg" id="login-seed-aviso" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- ================= TROCA DE SENHA OBRIGATÓRIA ================= -->
+  <div id="tela-troca-obrigatoria" style="display:none;">
+    <div class="login-card" style="margin:80px auto;">
+      <h1 style="font-size:1.4rem;">Defina sua senha</h1>
+      <div class="login-sub">Você está usando uma senha provisória. Crie uma nova senha para continuar.</div>
+      <div id="troca-obrig-erro"></div>
+      <div class="campo">
+        <label for="troca-obrig-nova">Nova senha</label>
+        <input id="troca-obrig-nova" type="password" autocomplete="new-password">
+      </div>
+      <div class="campo">
+        <label for="troca-obrig-conf">Confirmar nova senha</label>
+        <input id="troca-obrig-conf" type="password" autocomplete="new-password">
+      </div>
+      <button class="btn btn-primario btn-bloco" id="btn-confirmar-troca">Salvar e continuar</button>
+    </div>
+  </div>
+
+  <!-- ================= APLICAÇÃO PRINCIPAL ================= -->
+  <div id="app">
+    <div class="shell">
+      <!-- SIDEBAR -->
+      <aside class="sidebar">
+        <div class="brand">
+          <img class="logo-img-sidebar" src="/logo.png" alt="EcoFrotas">
+          <span>EcoFrotas</span>
+        </div>
+
+        <nav style="display:flex;flex-direction:column;">
+          <div class="nav-item ativo" data-pagina="painel">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+            Painel
+          </div>
+          <div class="nav-item" data-pagina="novo">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Novo agendamento
+          </div>
+          <div class="nav-item" data-pagina="relatorio">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            Relatório
+          </div>
+          <div class="nav-item" data-pagina="admin">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/></svg>
+            <span id="nav-admin-label">Agendamentos</span>
+          </div>
+
+          <div class="nav-sep"></div>
+
+          <div class="nav-item" id="nav-carros" data-pagina="carros">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 17h14M5 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm14 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM3 17V9l2-5h14l2 5v8"/></svg>
+            Carros
+          </div>
+          <div class="nav-item" data-pagina="minhaconta">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+            Minha conta
+          </div>
+
+          <div class="nav-sep" id="sep-admin" style="display:none;"></div>
+          <div class="nav-item" id="nav-usuarios" data-pagina="usuarios" style="display:none;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Usuários
+          </div>
+        </nav>
+
+        <div class="sidebar-foot">
+          <div class="quem">
+            <b id="quem-nome"></b>
+            <span id="quem-tag"></span>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-fantasma" style="flex:1;" id="btn-sair">Sair</button>
+            <button class="theme-toggle" id="btn-tema-app" title="Alternar modo claro/escuro">🌙</button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ÁREA PRINCIPAL -->
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <h2 id="topo-titulo">Painel</h2>
+            <div class="data-hoje" id="topo-data"></div>
+          </div>
+        </header>
+
+        <div class="conteudo">
+
+          <!-- ===== PÁGINA: PAINEL ===== -->
+          <section class="pagina ativa" id="pg-painel">
+            <div class="grid-stats" id="painel-stats"></div>
+
+            <div class="cartao">
+              <h3>Hoje</h3>
+              <div class="sub">Situação da frota para o dia de hoje, por veículo.</div>
+              <div id="painel-hoje"></div>
+            </div>
+
+            <div class="cartao" id="painel-semana-card">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+                <div>
+                  <h3 style="margin:0 0 4px;">Semana</h3>
+                  <div class="sub" id="painel-semana-sub" style="margin-bottom:16px;">
+                    Agenda de cada veículo nos próximos 7 dias. Toque no nome do carro ou na célula para agendar.
+                  </div>
+                </div>
+                <button class="icon-btn" id="btn-abrir-seletor-periodo" title="Escolher quantos dias mostrar" style="flex-shrink:0;display:flex;align-items:center;gap:6px;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <span id="painel-semana-periodo-label">7 dias</span>
+                </button>
+              </div>
+              <div style="overflow-x:auto;">
+                <table class="semana" id="painel-semana"></table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ===== PÁGINA: NOVO AGENDAMENTO ===== -->
+          <section class="pagina" id="pg-novo">
+            <div class="cartao" style="max-width:720px;">
+              <h3 id="novo-titulo">Novo agendamento</h3>
+              <div class="sub" id="novo-sub">Reserve um veículo. O sistema bloqueia automaticamente qualquer conflito de data e horário para o mesmo carro.</div>
+              <div id="novo-erro"></div>
+
+              <div class="linha">
+                <div class="campo">
+                  <label for="ag-responsavel-display">Usuário responsável (quem agendou)</label>
+                  <input type="text" id="ag-responsavel-display" disabled style="background:var(--fundo);color:var(--texto-suave);">
+                </div>
+                <div class="campo">
+                  <label for="ag-carro">Veículo</label>
+                  <select id="ag-carro"></select>
+                </div>
+              </div>
+
+              <div class="linha">
+                <div class="campo">
+                  <label for="ag-usuario">Motorista (quem irá conduzir)</label>
+                  <select id="ag-usuario"></select>
+                  <div style="font-size:.76rem;color:var(--texto-suave);margin-top:5px;">Pode ser diferente de quem está fazendo o agendamento — escolha quem vai dirigir de fato.</div>
+                </div>
+              </div>
+
+              <div class="linha">
+                <div class="campo">
+                  <label for="ag-data-ini">Data de início</label>
+                  <input type="date" id="ag-data-ini">
+                </div>
+                <div class="campo">
+                  <label for="ag-hora-ini">Horário de início</label>
+                  <input type="time" id="ag-hora-ini">
+                </div>
+              </div>
+
+              <div class="linha">
+                <div class="campo">
+                  <label for="ag-data-fim">Data final</label>
+                  <input type="date" id="ag-data-fim">
+                </div>
+                <div class="campo">
+                  <label for="ag-hora-fim">Horário final</label>
+                  <input type="time" id="ag-hora-fim">
+                </div>
+              </div>
+
+              <div class="campo">
+                <label for="ag-rota">Itinerário (rota que o veículo irá fazer) <span style="color:var(--vermelho);">*</span></label>
+                <textarea id="ag-rota" rows="2" placeholder="Ex.: Sede → Cliente X → Retorno" required></textarea>
+              </div>
+              <div class="campo">
+                <label for="ag-objetivo">Objetivo <span style="color:var(--vermelho);">*</span></label>
+                <input id="ag-objetivo" placeholder="Ex.: Visita técnica, entrega, reunião..." required>
+              </div>
+              <div class="campo">
+                <label for="ag-obs">Observação</label>
+                <textarea id="ag-obs" rows="2" placeholder="Opcional"></textarea>
+              </div>
+
+              <hr style="border:none;border-top:1px solid var(--borda);margin:22px 0 16px;">
+              <h3 style="font-size:1.05rem;margin:0 0 4px;">Checklist de saída do veículo <span style="color:var(--vermelho);">*</span></h3>
+              <div class="sub" style="margin-bottom:14px;">Confira o veículo antes de retirá-lo — obrigatório para salvar o agendamento.</div>
+
+              <div class="linha">
+                <div class="campo">
+                  <label for="ag-chk-km">Quilometragem atual</label>
+                  <input type="number" id="ag-chk-km" min="0" placeholder="Ex.: 45210">
+                </div>
+                <div class="campo">
+                  <label for="ag-chk-combustivel">Nível de combustível</label>
+                  <select id="ag-chk-combustivel">
+                    <option value="">Selecione</option>
+                    <option value="Reserva">Reserva</option>
+                    <option value="1/4">1/4</option>
+                    <option value="1/2">1/2</option>
+                    <option value="3/4">3/4</option>
+                    <option value="Cheio">Cheio</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="campo">
+                <label>Avarias visíveis na lataria/pintura?</label>
+                <div class="check-toggle">
+                  <label><input type="radio" name="ag-chk-avarias" value="ok" checked><span>Não</span></label>
+                  <label class="negativo"><input type="radio" name="ag-chk-avarias" value="problema"><span>Sim</span></label>
+                </div>
+              </div>
+              <div class="campo" id="ag-chk-avarias-obs-campo" style="display:none;">
+                <label for="ag-chk-avarias-obs">Descreva a avaria</label>
+                <textarea id="ag-chk-avarias-obs" rows="2"></textarea>
+              </div>
+
+              <div class="campo">
+                <label>Pneus em bom estado (sem furos/bolhas)?</label>
+                <div class="check-toggle">
+                  <label><input type="radio" name="ag-chk-pneus" value="ok" checked><span>OK</span></label>
+                  <label class="negativo"><input type="radio" name="ag-chk-pneus" value="problema"><span>Não OK</span></label>
+                </div>
+              </div>
+
+              <div class="campo">
+                <label>Documento do veículo (CRLV) está no carro?</label>
+                <div class="check-toggle">
+                  <label><input type="radio" name="ag-chk-documento" value="ok" checked><span>Sim</span></label>
+                  <label class="negativo"><input type="radio" name="ag-chk-documento" value="problema"><span>Não</span></label>
+                </div>
+              </div>
+
+              <div class="campo">
+                <label>Triângulo, macaco e estepe presentes?</label>
+                <div class="check-toggle">
+                  <label><input type="radio" name="ag-chk-seguranca" value="ok" checked><span>Sim</span></label>
+                  <label class="negativo"><input type="radio" name="ag-chk-seguranca" value="problema"><span>Não</span></label>
+                </div>
+              </div>
+
+              <div class="campo">
+                <label>Faróis, setas e lanternas funcionando?</label>
+                <div class="check-toggle">
+                  <label><input type="radio" name="ag-chk-luzes" value="ok" checked><span>OK</span></label>
+                  <label class="negativo"><input type="radio" name="ag-chk-luzes" value="problema"><span>Não OK</span></label>
+                </div>
+              </div>
+
+              <div id="novo-disponibilidade"></div>
+
+              <div style="display:flex;gap:10px;">
+                <button class="btn btn-primario" id="btn-salvar-agendamento">Salvar agendamento</button>
+                <button class="btn btn-fantasma" id="btn-cancelar-edicao" style="display:none;">Cancelar edição</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- ===== PÁGINA: RELATÓRIO ===== -->
+          <section class="pagina" id="pg-relatorio">
+            <div class="cartao">
+              <h3>Relatório de viagens</h3>
+              <div class="sub" id="rel-sub">Todas as reservas para conferência e auditoria.</div>
+              <div class="filtros">
+                <div class="campo">
+                  <label for="rel-carro">Veículo</label>
+                  <select id="rel-carro"><option value="">Todos</option></select>
+                </div>
+                <div class="campo" id="rel-usuario-campo">
+                  <label for="rel-usuario">Motorista</label>
+                  <select id="rel-usuario"><option value="">Todos</option></select>
+                </div>
+                <div class="campo">
+                  <label for="rel-de">De</label>
+                  <input type="date" id="rel-de">
+                </div>
+                <div class="campo">
+                  <label for="rel-ate">Até</label>
+                  <input type="date" id="rel-ate">
+                </div>
+                <button class="btn btn-fantasma" id="btn-filtrar-relatorio">Filtrar</button>
+                <button class="btn btn-escuro" id="btn-exportar-csv">Exportar CSV</button>
+              </div>
+              <div style="overflow-x:auto;">
+                <table class="tbl" id="rel-tabela"></table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ===== PÁGINA: CARROS ===== -->
+          <section class="pagina" id="pg-carros">
+            <div class="cartao" style="max-width:520px;">
+              <h3>Cadastrar veículo</h3>
+              <div id="carro-erro"></div>
+              <div class="linha">
+                <div class="campo">
+                  <label for="carro-nome">Nome do carro</label>
+                  <input id="carro-nome" placeholder="Ex.: Fiat Strada branca">
+                </div>
+                <div class="campo">
+                  <label for="carro-placa">Placa</label>
+                  <input id="carro-placa" placeholder="ABC-1D23" style="text-transform:uppercase;">
+                </div>
+              </div>
+              <button class="btn btn-primario" id="btn-cadastrar-carro">Cadastrar carro</button>
+            </div>
+            <div class="cartao">
+              <h3>Veículos cadastrados</h3>
+              <table class="tbl" id="carros-tabela"></table>
+            </div>
+          </section>
+
+          <!-- ===== PÁGINA: MINHA CONTA ===== -->
+          <section class="pagina" id="pg-minhaconta">
+            <div class="cartao" style="max-width:420px;">
+              <h3>Alterar minha senha</h3>
+              <div id="conta-erro"></div>
+              <div class="campo">
+                <label for="conta-senha-atual">Senha atual</label>
+                <input type="password" id="conta-senha-atual" autocomplete="current-password">
+              </div>
+              <div class="campo">
+                <label for="conta-senha-nova">Nova senha</label>
+                <input type="password" id="conta-senha-nova" autocomplete="new-password">
+              </div>
+              <div class="campo">
+                <label for="conta-senha-conf">Confirmar nova senha</label>
+                <input type="password" id="conta-senha-conf" autocomplete="new-password">
+              </div>
+              <button class="btn btn-primario" id="btn-salvar-senha-perfil">Salvar nova senha</button>
+            </div>
+          </section>
+
+          <!-- ===== PÁGINA: USUÁRIOS ===== -->
+          <section class="pagina" id="pg-usuarios">
+            <div class="cartao" style="max-width:560px;">
+              <h3>Cadastrar usuário</h3>
+              <div class="sub">Você define uma senha mestre (provisória). O usuário deverá trocá-la no primeiro acesso.</div>
+              <div id="usr-erro"></div>
+              <div class="linha">
+                <div class="campo">
+                  <label for="usr-nome">Nome</label>
+                  <input id="usr-nome">
+                </div>
+                <div class="campo">
+                  <label for="usr-cpf">CPF</label>
+                  <input id="usr-cpf" placeholder="000.000.000-00" maxlength="14">
+                </div>
+              </div>
+              <div class="linha">
+                <div class="campo">
+                  <label for="usr-senha">Senha mestre (provisória)</label>
+                  <input id="usr-senha" type="text">
+                </div>
+                <div class="campo" id="usr-admin-campo" style="display:flex;align-items:end;">
+                  <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-weight:500;color:var(--texto);">
+                    <input type="checkbox" id="usr-admin" style="width:auto;"> Também é administrador
+                  </label>
+                </div>
+              </div>
+              <button class="btn btn-primario" id="btn-cadastrar-usuario">Cadastrar usuário</button>
+            </div>
+            <div class="cartao">
+              <h3>Usuários cadastrados</h3>
+              <table class="tbl" id="usuarios-tabela"></table>
+            </div>
+          </section>
+
+          <!-- ===== PÁGINA: ADMIN (AGENDAMENTOS) ===== -->
+          <section class="pagina" id="pg-admin">
+            <div class="cartao">
+              <h3>Agendamentos</h3>
+              <div class="sub" id="admin-agend-sub">Aqui estão todas as reservas da frota.</div>
+              <table class="tbl" id="admin-agend-tabela"></table>
+            </div>
+          </section>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
