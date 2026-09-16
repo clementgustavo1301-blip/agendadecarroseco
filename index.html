@@ -168,7 +168,7 @@
                   <span id="painel-semana-periodo-label">7 dias</span>
                 </button>
               </div>
-              <div style="overflow-x:auto;">
+              <div class="table-scroll">
                 <table class="semana" id="painel-semana"></table>
               </div>
             </div>
@@ -303,7 +303,7 @@
 
               <div id="novo-disponibilidade"></div>
 
-              <div style="display:flex;gap:10px;">
+              <div class="form-actions">
                 <button class="btn btn-primario" id="btn-salvar-agendamento">Salvar agendamento</button>
                 <button class="btn btn-fantasma" id="btn-cancelar-edicao" style="display:none;">Cancelar edição</button>
               </div>
@@ -335,7 +335,7 @@
                 <button class="btn btn-fantasma" id="btn-filtrar-relatorio">Filtrar</button>
                 <button class="btn btn-escuro" id="btn-exportar-csv">Exportar CSV</button>
               </div>
-              <div style="overflow-x:auto;">
+              <div class="table-scroll">
                 <table class="tbl" id="rel-tabela"></table>
               </div>
             </div>
@@ -360,7 +360,9 @@
             </div>
             <div class="cartao">
               <h3>Veículos cadastrados</h3>
-              <table class="tbl" id="carros-tabela"></table>
+              <div class="table-scroll">
+                <table class="tbl" id="carros-tabela"></table>
+              </div>
             </div>
           </section>
 
@@ -416,7 +418,9 @@
             </div>
             <div class="cartao">
               <h3>Usuários cadastrados</h3>
-              <table class="tbl" id="usuarios-tabela"></table>
+              <div class="table-scroll">
+                <table class="tbl" id="usuarios-tabela"></table>
+              </div>
             </div>
           </section>
 
@@ -425,7 +429,9 @@
             <div class="cartao">
               <h3>Agendamentos</h3>
               <div class="sub" id="admin-agend-sub">Aqui estão todas as reservas da frota.</div>
-              <table class="tbl" id="admin-agend-tabela"></table>
+              <div class="table-scroll">
+                <table class="tbl" id="admin-agend-tabela"></table>
+              </div>
             </div>
           </section>
 

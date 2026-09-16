@@ -49,12 +49,14 @@
 #app {
   display: none;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .shell {
   display: flex;
   flex-direction: column; /* Mobile first: column layout */
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Header para Mobile (Substitui Sidebar temporariamente na tela pequena) */
@@ -110,9 +112,10 @@
 .sidebar {
   position: fixed;
   top: 0;
-  left: -280px;
-  width: 260px;
+  left: -300px;
+  width: min(86vw, 260px);
   height: 100vh;
+  height: 100dvh;
   background: var(--sidebar-bg);
   color: var(--sidebar-texto);
   display: flex;
@@ -344,7 +347,7 @@ body.menu-mobile-aberto {
 
 .grid-stats {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 20px;
 }
@@ -354,6 +357,7 @@ body.menu-mobile-aberto {
   border: 1px solid var(--borda);
   border-radius: 8px;
   padding: 14px;
+  min-width: 0;
 }
 
 .stat .stat-num {
