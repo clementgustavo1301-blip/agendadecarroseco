@@ -147,6 +147,7 @@
 
           <!-- ===== PÁGINA: PAINEL ===== -->
           <section class="pagina ativa" id="pg-painel">
+            <div id="painel-lembrete-uso"></div>
             <div class="grid-stats" id="painel-stats"></div>
 
             <div class="cartao">
@@ -235,11 +236,14 @@
                 <textarea id="ag-obs" rows="2" placeholder="Opcional"></textarea>
               </div>
 
-              <hr style="border:none;border-top:1px solid var(--borda);margin:22px 0 16px;">
-              <h3 style="font-size:1.05rem;margin:0 0 4px;">Checklist de saída do veículo <span style="color:var(--vermelho);">*</span></h3>
-              <div class="sub" style="margin-bottom:14px;">Confira o veículo antes de retirá-lo — obrigatório para salvar o agendamento.</div>
+              <div id="ag-checklist-lembrete" class="aviso-msg" hidden></div>
 
-              <div class="linha">
+              <div id="ag-checklist-saida" hidden>
+                <hr style="border:none;border-top:1px solid var(--borda);margin:22px 0 16px;">
+                <h3 style="font-size:1.05rem;margin:0 0 4px;">Checklist de saída do veículo <span style="color:var(--vermelho);">*</span></h3>
+                <div class="sub" style="margin-bottom:14px;">Confira o veículo antes de retirá-lo — obrigatório para iniciar o uso.</div>
+
+                <div class="linha">
                 <div class="campo">
                   <label for="ag-chk-km">Quilometragem atual</label>
                   <input type="number" id="ag-chk-km" min="0" placeholder="Ex.: 45210">
@@ -255,49 +259,50 @@
                     <option value="Cheio">Cheio</option>
                   </select>
                 </div>
-              </div>
-
-              <div class="campo">
-                <label>Avarias visíveis na lataria/pintura?</label>
-                <div class="check-toggle">
-                  <label><input type="radio" name="ag-chk-avarias" value="ok" checked><span>Não</span></label>
-                  <label class="negativo"><input type="radio" name="ag-chk-avarias" value="problema"><span>Sim</span></label>
                 </div>
-              </div>
-              <div class="campo" id="ag-chk-avarias-obs-campo" style="display:none;">
-                <label for="ag-chk-avarias-obs">Descreva a avaria</label>
-                <textarea id="ag-chk-avarias-obs" rows="2"></textarea>
-              </div>
 
-              <div class="campo">
-                <label>Pneus em bom estado (sem furos/bolhas)?</label>
-                <div class="check-toggle">
-                  <label><input type="radio" name="ag-chk-pneus" value="ok" checked><span>OK</span></label>
-                  <label class="negativo"><input type="radio" name="ag-chk-pneus" value="problema"><span>Não OK</span></label>
+                <div class="campo">
+                  <label>Avarias visíveis na lataria/pintura?</label>
+                  <div class="check-toggle">
+                    <label><input type="radio" name="ag-chk-avarias" value="ok" checked><span>Não</span></label>
+                    <label class="negativo"><input type="radio" name="ag-chk-avarias" value="problema"><span>Sim</span></label>
+                  </div>
                 </div>
-              </div>
-
-              <div class="campo">
-                <label>Documento do veículo (CRLV) está no carro?</label>
-                <div class="check-toggle">
-                  <label><input type="radio" name="ag-chk-documento" value="ok" checked><span>Sim</span></label>
-                  <label class="negativo"><input type="radio" name="ag-chk-documento" value="problema"><span>Não</span></label>
+                <div class="campo" id="ag-chk-avarias-obs-campo" style="display:none;">
+                  <label for="ag-chk-avarias-obs">Descreva a avaria</label>
+                  <textarea id="ag-chk-avarias-obs" rows="2"></textarea>
                 </div>
-              </div>
 
-              <div class="campo">
-                <label>Triângulo, macaco e estepe presentes?</label>
-                <div class="check-toggle">
-                  <label><input type="radio" name="ag-chk-seguranca" value="ok" checked><span>Sim</span></label>
-                  <label class="negativo"><input type="radio" name="ag-chk-seguranca" value="problema"><span>Não</span></label>
+                <div class="campo">
+                  <label>Pneus em bom estado (sem furos/bolhas)?</label>
+                  <div class="check-toggle">
+                    <label><input type="radio" name="ag-chk-pneus" value="ok" checked><span>OK</span></label>
+                    <label class="negativo"><input type="radio" name="ag-chk-pneus" value="problema"><span>Não OK</span></label>
+                  </div>
                 </div>
-              </div>
 
-              <div class="campo">
-                <label>Faróis, setas e lanternas funcionando?</label>
-                <div class="check-toggle">
-                  <label><input type="radio" name="ag-chk-luzes" value="ok" checked><span>OK</span></label>
-                  <label class="negativo"><input type="radio" name="ag-chk-luzes" value="problema"><span>Não OK</span></label>
+                <div class="campo">
+                  <label>Documento do veículo (CRLV) está no carro?</label>
+                  <div class="check-toggle">
+                    <label><input type="radio" name="ag-chk-documento" value="ok" checked><span>Sim</span></label>
+                    <label class="negativo"><input type="radio" name="ag-chk-documento" value="problema"><span>Não</span></label>
+                  </div>
+                </div>
+
+                <div class="campo">
+                  <label>Triângulo, macaco e estepe presentes?</label>
+                  <div class="check-toggle">
+                    <label><input type="radio" name="ag-chk-seguranca" value="ok" checked><span>Sim</span></label>
+                    <label class="negativo"><input type="radio" name="ag-chk-seguranca" value="problema"><span>Não</span></label>
+                  </div>
+                </div>
+
+                <div class="campo">
+                  <label>Faróis, setas e lanternas funcionando?</label>
+                  <div class="check-toggle">
+                    <label><input type="radio" name="ag-chk-luzes" value="ok" checked><span>OK</span></label>
+                    <label class="negativo"><input type="radio" name="ag-chk-luzes" value="problema"><span>Não OK</span></label>
+                  </div>
                 </div>
               </div>
 

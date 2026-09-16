@@ -21,6 +21,7 @@ import { renderRelatorio, setupReportsPage } from './pages/reportsPage.js';
 import { setupProfilePage } from './pages/profilePage.js';
 
 let paginaAtual = 'painel';
+let atualizacaoLembreteTimer = null;
 
 function menuEstaAberto() {
   return document.querySelector('.sidebar')?.classList.contains('aberta');
@@ -121,7 +122,8 @@ export async function irPara(pagina) {
   if (pagina === 'painel') {
     await renderPainel({
       onQuickBooking: (carroId, dataISO) => novoAgendamentoRapido(carroId, dataISO),
-      onEditBooking: (id) => iniciarEdicaoAgendamento(id, currentUser, irPara)
+      onEditBooking: (id) => iniciarEdicaoAgendamento(id, currentUser, irPara),
+      currentUser
     });
   } else if (pagina === 'novo') {
     await popularSelects(currentUser);
@@ -168,6 +170,21 @@ async function novoAgendamentoRapido(carroId, dataISO) {
   await checarDisponibilidadeLive();
 }
 
+function iniciarAtualizacaoLembretes() {
+  if (atualizacaoLembreteTimer) clearInterval(atualizacaoLembreteTimer);
+
+  atualizacaoLembreteTimer = setInterval(() => {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser || paginaAtual !== 'painel') return;
+
+    renderPainel({
+      onQuickBooking: (carroId, dataISO) => novoAgendamentoRapido(carroId, dataISO),
+      onEditBooking: (id) => iniciarEdicaoAgendamento(id, currentUser, irPara),
+      currentUser
+    });
+  }, 30000);
+}
+
 async function entrarNoApp(user) {
   document.getElementById('tela-login').style.display = 'none';
   document.getElementById('tela-troca-obrigatoria').style.display = 'none';
@@ -193,9 +210,14 @@ async function entrarNoApp(user) {
   });
 
   await irPara('painel');
+  iniciarAtualizacaoLembretes();
 }
 
 function sair() {
+  if (atualizacaoLembreteTimer) {
+    clearInterval(atualizacaoLembreteTimer);
+    atualizacaoLembreteTimer = null;
+  }
   authService.logout();
   document.getElementById('app').style.display = 'none';
   document.getElementById('tela-login').style.display = 'flex';
@@ -256,7 +278,8 @@ async function init() {
           const currentUser = authService.getCurrentUser();
           renderPainel({
             onQuickBooking: (cId, dISO) => novoAgendamentoRapido(cId, dISO),
-            onEditBooking: (id) => iniciarEdicaoAgendamento(id, currentUser, irPara)
+            onEditBooking: (id) => iniciarEdicaoAgendamento(id, currentUser, irPara),
+            currentUser
           });
         }
       });

@@ -2,11 +2,52 @@ import { fleetService } from '../services/fleetService.js';
 import { userService } from '../services/userService.js';
 import { bookingService } from '../services/bookingService.js';
 import { authService } from '../services/authService.js';
-import { combinarDataHora } from '../utils/dateUtils.js';
+import { combinarDataHora, fmtDataHora } from '../utils/dateUtils.js';
 import { escapeHtml } from '../utils/dom.js';
 import { toast } from '../components/toast.js';
 
 let editandoAgendamentoId = null;
+let checklistSaidaExistente = false;
+
+function obterPeriodoFormulario() {
+  const dataIni = document.getElementById('ag-data-ini').value;
+  const horaIni = document.getElementById('ag-hora-ini').value;
+  const dataFim = document.getElementById('ag-data-fim').value;
+  const horaFim = document.getElementById('ag-hora-fim').value;
+
+  if (!dataIni || !horaIni || !dataFim || !horaFim) return null;
+  const inicio = combinarDataHora(dataIni, horaIni);
+  const fim = combinarDataHora(dataFim, horaFim);
+  return fim > inicio ? { inicio, fim } : null;
+}
+
+export function atualizarEstadoChecklistFormulario() {
+  const secaoChecklist = document.getElementById('ag-checklist-saida');
+  const lembrete = document.getElementById('ag-checklist-lembrete');
+  const periodo = obterPeriodoFormulario();
+
+  if (!periodo) {
+    secaoChecklist.hidden = true;
+    lembrete.hidden = true;
+    lembrete.textContent = '';
+    return;
+  }
+
+  const checklistObrigatorio = bookingService.checklistSaidaObrigatorio(periodo.inicio, periodo.fim);
+  secaoChecklist.hidden = !checklistObrigatorio || checklistSaidaExistente;
+  lembrete.hidden = false;
+
+  if (checklistObrigatorio && checklistSaidaExistente) {
+    lembrete.textContent = 'O checklist de saída deste agendamento já foi preenchido.';
+    return;
+  }
+  if (checklistObrigatorio) {
+    lembrete.textContent = 'Este veículo está no período de uso. Preencha o checklist de saída antes de salvar.';
+    return;
+  }
+
+  lembrete.textContent = `O checklist de saída será solicitado em ${fmtDataHora(periodo.inicio)}, quando chegar o horário de uso do veículo.`;
+}
 
 export async function popularSelects(currentUser) {
   const users = await userService.listarUsuarios();
@@ -47,14 +88,15 @@ function preencherChecklistFormulario(c) {
   marcarRadio('ag-chk-avarias', c.avarias ? 'problema' : 'ok');
   document.getElementById('ag-chk-avarias-obs').value = c.avariasObs || '';
   document.getElementById('ag-chk-avarias-obs-campo').style.display = c.avarias ? 'block' : 'none';
-  marcarRadio('ag-chk-pneus', c.pneusOk ? 'ok' : 'problema');
-  marcarRadio('ag-chk-documento', c.documentoOk ? 'ok' : 'problema');
-  marcarRadio('ag-chk-seguranca', c.segurancaOk ? 'ok' : 'problema');
-  marcarRadio('ag-chk-luzes', c.luzesOk ? 'ok' : 'problema');
+  marcarRadio('ag-chk-pneus', c.pneus ? 'ok' : 'problema');
+  marcarRadio('ag-chk-documento', c.documentos ? 'ok' : 'problema');
+  marcarRadio('ag-chk-seguranca', c.kitSeguranca ? 'ok' : 'problema');
+  marcarRadio('ag-chk-luzes', c.luzes ? 'ok' : 'problema');
 }
 
 export async function prepararFormularioAgendamento(currentUser) {
   editandoAgendamentoId = null;
+  checklistSaidaExistente = false;
   document.getElementById('novo-erro').innerHTML = '';
   document.getElementById('novo-disponibilidade').innerHTML = '';
   const hoje = new Date().toISOString().slice(0, 10);
@@ -69,6 +111,7 @@ export async function prepararFormularioAgendamento(currentUser) {
   resetarChecklistFormulario();
   await popularSelects(currentUser);
   atualizarModoFormularioAgendamento();
+  atualizarEstadoChecklistFormulario();
 }
 
 export function atualizarModoFormularioAgendamento() {
@@ -103,6 +146,7 @@ export async function iniciarEdicaoAgendamento(id, currentUser, onGoToPage) {
   }
 
   editandoAgendamentoId = id;
+  checklistSaidaExistente = Boolean(s.checklistSaida);
   onGoToPage('novo');
   await popularSelects(currentUser);
 
@@ -131,6 +175,7 @@ export async function iniciarEdicaoAgendamento(id, currentUser, onGoToPage) {
   document.getElementById('novo-erro').innerHTML = '';
   document.getElementById('novo-disponibilidade').innerHTML = '';
   atualizarModoFormularioAgendamento();
+  atualizarEstadoChecklistFormulario();
 }
 
 export async function checarDisponibilidadeLive() {
@@ -155,8 +200,8 @@ export async function checarDisponibilidadeLive() {
     return;
   }
 
-  const temConflito = await bookingService.existeConflito(carroId, inicio, fim, editandoAgendamentoId);
-  if (temConflito) {
+  const conflito = await bookingService.obterConflito(carroId, inicio, fim, editandoAgendamentoId);
+  if (conflito) {
     box.innerHTML = '<div class="erro-msg">Conflito: veículo já reservado nesse período.</div>';
   } else {
     box.innerHTML = '<div class="aviso-msg" style="background:var(--verde-bg);color:var(--verde);margin-top:0;margin-bottom:14px;">Disponível nesse período.</div>';
@@ -171,8 +216,12 @@ export function setupBookingFormPage({ onSaved }) {
   ['ag-carro', 'ag-data-ini', 'ag-hora-ini', 'ag-data-fim', 'ag-hora-fim'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
-      el.addEventListener('input', checarDisponibilidadeLive);
-      el.addEventListener('change', checarDisponibilidadeLive);
+      const atualizarFormulario = () => {
+        checarDisponibilidadeLive();
+        atualizarEstadoChecklistFormulario();
+      };
+      el.addEventListener('input', atualizarFormulario);
+      el.addEventListener('change', atualizarFormulario);
     }
   });
 

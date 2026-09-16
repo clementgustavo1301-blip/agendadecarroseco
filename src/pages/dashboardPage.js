@@ -4,10 +4,11 @@ import { userService } from '../services/userService.js';
 import { DIAS_SEMANA, MESES } from '../core/constants.js';
 import { mesmoDia, fmtHora } from '../utils/dateUtils.js';
 import { escapeHtml } from '../utils/dom.js';
+import { abrirModalChecklist } from '../components/checklistModal.js';
 
 let diasSemanaVisualizacao = 7;
 
-export async function renderPainel({ onQuickBooking, onEditBooking }) {
+export async function renderPainel({ onQuickBooking, onEditBooking, currentUser = null }) {
   const hoje = new Date();
   const cars = await fleetService.listarCarros();
   const schedules = await bookingService.listarAgendamentos();
@@ -15,6 +16,14 @@ export async function renderPainel({ onQuickBooking, onEditBooking }) {
 
   const schedulesAtivos = schedules.filter(s => !s.excluido);
   const carrosAtivos = cars.filter(c => c.ativo);
+
+  renderLembretesDeUso({
+    currentUser,
+    schedules: schedulesAtivos,
+    cars,
+    onQuickBooking,
+    onEditBooking
+  });
 
   // Stats
   const stats = document.getElementById('painel-stats');
@@ -100,6 +109,62 @@ export async function renderPainel({ onQuickBooking, onEditBooking }) {
 
   // Semana / Período
   renderSemana({ onQuickBooking, onEditBooking, carrosAtivos, schedules, users });
+}
+
+function renderLembretesDeUso({ currentUser, schedules, cars, onQuickBooking, onEditBooking }) {
+  const area = document.getElementById('painel-lembrete-uso');
+  if (!area) return;
+  if (!currentUser) {
+    area.innerHTML = '';
+    return;
+  }
+
+  const agora = new Date();
+  const pendentes = schedules
+    .filter(s =>
+      !s.checklistSaida &&
+      (s.usuarioId === currentUser.id || s.criadoPorId === currentUser.id) &&
+      new Date(s.inicio) <= agora &&
+      new Date(s.fim) >= agora
+    )
+    .sort((a, b) => new Date(a.inicio) - new Date(b.inicio));
+
+  if (!pendentes.length) {
+    area.innerHTML = '';
+    return;
+  }
+
+  area.innerHTML = pendentes.map(s => {
+    const carro = cars.find(c => c.id === s.carroId);
+    const nomeCarro = carro ? `${escapeHtml(carro.nome)} — ${escapeHtml(carro.placa)}` : 'seu veículo agendado';
+    return `
+      <div class="aviso-msg lembrete-uso">
+        <strong>Hora de usar o veículo</strong><br>
+        Seu agendamento para ${nomeCarro} já iniciou. Faça o checklist de saída antes de retirar o veículo.
+        <div style="margin-top:10px;">
+          <button class="icon-btn destaque btn-preencher-checklist" data-id="${s.id}">Preencher checklist de saída</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  area.querySelectorAll('.btn-preencher-checklist').forEach(btn => {
+    btn.onclick = () => {
+      const agendamento = pendentes.find(s => s.id === btn.dataset.id);
+      const carro = agendamento ? cars.find(c => c.id === agendamento.carroId) : null;
+      if (!agendamento) return;
+
+      abrirModalChecklist({
+        tipo: 'saida',
+        agendamento,
+        carro,
+        aoSalvar: async dados => {
+          await bookingService.salvarChecklist('saida', agendamento.id, dados, currentUser);
+          await renderPainel({ onQuickBooking, onEditBooking, currentUser });
+        }
+      });
+    };
+  });
 }
 
 function renderSemana({ onQuickBooking, onEditBooking, carrosAtivos, schedules, users }) {

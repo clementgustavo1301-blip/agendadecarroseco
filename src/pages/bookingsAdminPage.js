@@ -19,6 +19,7 @@ export async function renderAdminAgendamentos(currentUser, { onEditar, onAtualiz
   }
 
   const lista = base.sort((a, b) => new Date(b.inicio) - new Date(a.inicio));
+  const agora = new Date();
 
   if (lista.length === 0) {
     tabela.innerHTML = '<tr><td><div class="vazio">Nenhum agendamento encontrado.</div></td></tr>';
@@ -30,6 +31,8 @@ export async function renderAdminAgendamentos(currentUser, { onEditar, onAtualiz
     const usuario = users.find(u => u.id === s.usuarioId);
     const responsavel = users.find(u => u.id === s.criadoPorId);
     const podeMexer = bookingService.podeEditarOuExcluir(s, currentUser);
+    const emPeriodoDeUso = new Date(s.inicio) <= agora && new Date(s.fim) >= agora;
+    const agendamentoFuturo = new Date(s.inicio) > agora;
 
     const acoes = podeMexer
       ? `
@@ -41,8 +44,12 @@ export async function renderAdminAgendamentos(currentUser, { onEditar, onAtualiz
     let checklistCel;
     if (!podeMexer) {
       checklistCel = '<span class="vazio" style="padding:0;">—</span>';
-    } else if (!s.checklistSaida) {
+    } else if (!s.checklistSaida && emPeriodoDeUso) {
       checklistCel = `<button class="icon-btn destaque btn-chk" data-tipo="saida" data-id="${s.id}">Preencher saída</button>`;
+    } else if (!s.checklistSaida && agendamentoFuturo) {
+      checklistCel = '<span class="vazio" style="padding:0;">Disponível no início da reserva</span>';
+    } else if (!s.checklistSaida) {
+      checklistCel = '<span class="vazio" style="padding:0;">Checklist de saída pendente</span>';
     } else if (!s.checklistChegada) {
       const tituloAvaria = s.checklistSaida.avarias
         ? ` title="Avaria na saída: ${escapeHtml(s.checklistSaida.avariasObs || '')}"`

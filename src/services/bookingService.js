@@ -1,5 +1,4 @@
 import { supabase } from './supabaseClient.js';
-import { uid } from '../utils/dom.js';
 import { fmtDataHora } from '../utils/dateUtils.js';
 
 class BookingService {
@@ -37,6 +36,8 @@ class BookingService {
         objetivo: b.purpose,
         observacao: b.notes,
         criadoPorId: b.created_by_id,
+        criadorNome: b.creator?.name || null,
+        motoristaNome: b.driver?.name || null,
         criadoEm: b.created_at,
         excluido: b.is_deleted,
         checklistSaida: saida ? {
@@ -68,18 +69,53 @@ class BookingService {
     return schedules.find(s => s.id === id) || null;
   }
 
-  async existeConflito(carroId, inicioDate, fimDate, excluirId = null) {
+  async obterConflito(carroId, inicioDate, fimDate, excluirId = null) {
     // Na nova arquitetura, o PostgreSQL tem um TRIGGER que impede o conflito (fn_prevent_booking_conflict)
     // Mas podemos verificar preventivamente no frontend também.
     const schedules = await this.listarAgendamentos();
-    return schedules.some(s => {
+    return schedules.find(s => {
       if (s.excluido) return false;
       if (s.carroId !== carroId) return false;
       if (excluirId && s.id === excluirId) return false;
       const sInicio = new Date(s.inicio);
       const sFim = new Date(s.fim);
       return sInicio < fimDate && sFim > inicioDate;
-    });
+    }) || null;
+  }
+
+  async existeConflito(carroId, inicioDate, fimDate, excluirId = null) {
+    return Boolean(await this.obterConflito(carroId, inicioDate, fimDate, excluirId));
+  }
+
+  mensagemConflito(conflito) {
+    const responsavel = conflito.criadorNome || 'outro usuário';
+    return `Este veículo já está reservado nesse período: ${fmtDataHora(conflito.inicio)} até ${fmtDataHora(conflito.fim)} (agendado por ${responsavel}). Escolha outro horário ou veículo.`;
+  }
+
+  checklistSaidaObrigatorio(inicio, fim, agora = new Date()) {
+    return inicio <= agora && fim >= agora;
+  }
+
+  async inserirChecklistSaida(bookingId, checklistSaida, currentUser) {
+    const { error } = await supabase
+      .from('checklists')
+      .insert({
+        booking_id: bookingId,
+        type: 'saida',
+        odometer_km: parseInt(checklistSaida.km, 10),
+        fuel: checklistSaida.combustivel,
+        has_damages: checklistSaida.avarias || false,
+        damages_description: checklistSaida.avariasObs || '',
+        tires_ok: checklistSaida.pneusOk !== false,
+        documents_ok: checklistSaida.documentoOk !== false,
+        safety_kit_ok: checklistSaida.segurancaOk !== false,
+        lights_ok: checklistSaida.luzesOk !== false,
+        inspected_by_id: currentUser.id
+      });
+
+    if (error) {
+      throw new Error('Agendamento salvo, mas falhou ao salvar o checklist de saída.');
+    }
   }
 
   podeEditarOuExcluir(agendamento, currentUser) {
@@ -104,13 +140,19 @@ class BookingService {
     if (!rota) throw new Error('O itinerário é obrigatório.');
     if (!objetivo) throw new Error('O objetivo da viagem é obrigatório.');
     
-    if (!editandoId) {
+    const checklistObrigatorio = this.checklistSaidaObrigatorio(inicio, fim);
+    if (checklistObrigatorio) {
       if (!checklistSaida || !checklistSaida.km || !checklistSaida.combustivel) {
         throw new Error('Preencha a quilometragem e o nível de combustível no checklist de saída.');
       }
       if (checklistSaida.avarias && !checklistSaida.avariasObs) {
         throw new Error('Descreva a avaria encontrada no checklist de saída.');
       }
+    }
+
+    const conflito = await this.obterConflito(carroId, inicio, fim, editandoId);
+    if (conflito) {
+      throw new Error(this.mensagemConflito(conflito));
     }
 
     if (editandoId) {
@@ -132,12 +174,27 @@ class BookingService {
         .single();
 
       if (error) {
+        const conflitoAtual = await this.obterConflito(carroId, inicio, fim, editandoId);
+        if (conflitoAtual) throw new Error(this.mensagemConflito(conflitoAtual));
         throw new Error(error.message || 'Erro ao editar agendamento. Pode haver um conflito de horário.');
       }
 
-      // Update Checklist (simplificado: não suportado via tela neste momento sem criar rota específica)
-      // Idealmente, usaríamos uma transaction no RPC para atualizar ambos, mas manteremos simples.
-      
+      if (checklistObrigatorio) {
+        const { data: checklistExistente, error: checklistConsultaErro } = await supabase
+          .from('checklists')
+          .select('id')
+          .eq('booking_id', editandoId)
+          .eq('type', 'saida')
+          .maybeSingle();
+
+        if (checklistConsultaErro) {
+          throw new Error('Agendamento salvo, mas não foi possível verificar o checklist de saída.');
+        }
+        if (!checklistExistente) {
+          await this.inserirChecklistSaida(editandoId, checklistSaida, currentUser);
+        }
+      }
+
       return data;
     } else {
       // INSERT Booking
@@ -157,28 +214,13 @@ class BookingService {
         .single();
 
       if (bookingError) {
+        const conflitoAtual = await this.obterConflito(carroId, inicio, fim);
+        if (conflitoAtual) throw new Error(this.mensagemConflito(conflitoAtual));
         throw new Error(bookingError.message || 'Conflito de agenda: o veículo já possui uma reserva ativa neste período.');
       }
 
-      // INSERT Checklist Saida
-      const { error: checklistError } = await supabase
-        .from('checklists')
-        .insert({
-          booking_id: bookingData.id,
-          type: 'saida',
-          odometer_km: parseInt(checklistSaida.km, 10),
-          fuel: checklistSaida.combustivel,
-          has_damages: checklistSaida.avarias || false,
-          damages_description: checklistSaida.avariasObs || '',
-          tires_ok: checklistSaida.pneus !== false,
-          documents_ok: checklistSaida.documentos !== false,
-          safety_kit_ok: checklistSaida.kitSeguranca !== false,
-          lights_ok: checklistSaida.luzes !== false,
-          inspected_by_id: currentUser.id
-        });
-
-      if (checklistError) {
-        throw new Error('Agendamento criado, mas falha ao salvar o checklist.');
+      if (checklistObrigatorio) {
+        await this.inserirChecklistSaida(bookingData.id, checklistSaida, currentUser);
       }
 
       return bookingData;
@@ -213,6 +255,10 @@ class BookingService {
         fuel: dadosChecklist.combustivel,
         has_damages: dadosChecklist.avarias || dadosChecklist.avariaNova || false,
         damages_description: dadosChecklist.avariasObs || dadosChecklist.avariaNovaObs || '',
+        tires_ok: dadosChecklist.pneusOk !== false,
+        documents_ok: dadosChecklist.documentoOk !== false,
+        safety_kit_ok: dadosChecklist.segurancaOk !== false,
+        lights_ok: dadosChecklist.luzesOk !== false,
         inspected_by_id: currentUser.id
       });
 
