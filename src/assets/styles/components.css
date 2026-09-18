@@ -357,6 +357,10 @@ body.tema-escuro .icon-btn:hover {
   background: var(--verde);
 }
 
+.toast.aviso {
+  background: #d97706;
+}
+
 @keyframes slideUp {
   from {
     transform: translateY(20px);

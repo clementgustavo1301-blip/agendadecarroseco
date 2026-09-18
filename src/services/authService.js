@@ -1,14 +1,147 @@
 import { supabase } from './supabaseClient.js';
 import { limparCPF } from '../utils/formatters.js';
 
+const TEMPO_INATIVIDADE_MS = 2 * 60 * 1000; // 2 minutos
+const CHAVE_ULTIMA_ATIVIDADE = 'ecofrotas_ultima_atividade';
+
 class AuthService {
   constructor() {
     this.currentUser = null;
     this.usuarioEmTrocaObrigatoria = null;
+    this.intervaloInatividade = null;
+    this.listenerAtividade = null;
+    this.ultimoRegistroLocal = 0;
   }
 
   getCurrentUser() {
     return this.currentUser;
+  }
+
+  registrarAtividade() {
+    const agora = Date.now();
+    // Throttle de 1 segundo para não sobrecarregar localStorage
+    if (agora - this.ultimoRegistroLocal >= 1000) {
+      this.ultimoRegistroLocal = agora;
+      try {
+        localStorage.setItem(CHAVE_ULTIMA_ATIVIDADE, String(agora));
+      } catch (e) {
+        // Ignora possíveis erros de quota
+      }
+    }
+  }
+
+  obterUltimaAtividade() {
+    try {
+      const val = localStorage.getItem(CHAVE_ULTIMA_ATIVIDADE);
+      return val ? parseInt(val, 10) : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  estaExpiradoPorInatividade() {
+    const ultima = this.obterUltimaAtividade();
+    if (!ultima) return false;
+    return (Date.now() - ultima) >= TEMPO_INATIVIDADE_MS;
+  }
+
+  iniciarMonitorInatividade(aoExpirar) {
+    this.pararMonitorInatividade();
+    this.registrarAtividade();
+
+    const eventos = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    this.listenerAtividade = () => {
+      if (this.currentUser && this.estaExpiradoPorInatividade()) {
+        aoExpirar();
+        return;
+      }
+      this.registrarAtividade();
+    };
+
+    eventos.forEach(ev => {
+      window.addEventListener(ev, this.listenerAtividade, { passive: true });
+    });
+
+    window.addEventListener('focus', this.listenerAtividade);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        if (this.currentUser && this.estaExpiradoPorInatividade()) {
+          aoExpirar();
+        } else {
+          this.registrarAtividade();
+        }
+      }
+    });
+
+    this.intervaloInatividade = setInterval(() => {
+      if (this.currentUser && this.estaExpiradoPorInatividade()) {
+        aoExpirar();
+      }
+    }, 2000);
+  }
+
+  pararMonitorInatividade() {
+    if (this.intervaloInatividade) {
+      clearInterval(this.intervaloInatividade);
+      this.intervaloInatividade = null;
+    }
+    if (this.listenerAtividade) {
+      const eventos = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+      eventos.forEach(ev => {
+        window.removeEventListener(ev, this.listenerAtividade);
+      });
+      window.removeEventListener('focus', this.listenerAtividade);
+      this.listenerAtividade = null;
+    }
+  }
+
+  async restaurarSessao() {
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session || !session.user) {
+        this.currentUser = null;
+        return null;
+      }
+
+      // Se a sessão expirou por inatividade de 2 minutos
+      if (this.estaExpiradoPorInatividade()) {
+        await this.logout();
+        return { expiradoPorInatividade: true };
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+
+      if (profileError || !profile) {
+        await this.logout();
+        return null;
+      }
+
+      const authUser = {
+        id: profile.id,
+        nome: profile.name,
+        cpf: profile.cpf,
+        isAdmin: profile.role === 'admin' || profile.role === 'admin_mestre',
+        isAdminMestre: profile.role === 'admin_mestre',
+        senhaProvisoria: profile.requires_password_change,
+        role: profile.role
+      };
+
+      if (authUser.senhaProvisoria) {
+        this.usuarioEmTrocaObrigatoria = authUser;
+        return { requiresPasswordChange: true, user: authUser };
+      }
+
+      this.currentUser = authUser;
+      this.registrarAtividade();
+      return { success: true, user: authUser };
+    } catch (e) {
+      console.warn('Erro ao restaurar sessão:', e);
+      return null;
+    }
   }
 
   async login(cpfInput, senha) {
@@ -56,6 +189,7 @@ class AuthService {
     }
 
     this.currentUser = authUser;
+    this.registrarAtividade();
     return { success: true, user: authUser };
   }
 
@@ -132,7 +266,13 @@ class AuthService {
   }
 
   async logout() {
-    await supabase.auth.signOut();
+    this.pararMonitorInatividade();
+    try {
+      localStorage.removeItem(CHAVE_ULTIMA_ATIVIDADE);
+    } catch {}
+    try {
+      await supabase.auth.signOut();
+    } catch {}
     this.currentUser = null;
     this.usuarioEmTrocaObrigatoria = null;
   }

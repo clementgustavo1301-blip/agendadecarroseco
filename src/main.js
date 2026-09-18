@@ -214,21 +214,34 @@ async function entrarNoApp(user) {
     year: 'numeric'
   });
 
+  // Monitor de inatividade de 2 minutos
+  authService.iniciarMonitorInatividade(() => {
+    deslogarPorInatividade();
+  });
+
   await irPara('painel');
   iniciarAtualizacaoLembretes();
 }
 
-function sair() {
+async function sair(silencioso = false) {
   if (atualizacaoLembreteTimer) {
     clearInterval(atualizacaoLembreteTimer);
     atualizacaoLembreteTimer = null;
   }
-  authService.logout();
+  await authService.logout();
   document.getElementById('app').style.display = 'none';
+  document.getElementById('tela-troca-obrigatoria').style.display = 'none';
   document.getElementById('tela-login').style.display = 'flex';
   document.getElementById('login-cpf').value = '';
   document.getElementById('login-senha').value = '';
-  toast('Você saiu do sistema.', 'sucesso');
+  if (!silencioso) {
+    toast('Você saiu do sistema.', 'sucesso');
+  }
+}
+
+async function deslogarPorInatividade() {
+  await sair(true);
+  toast('Sua sessão expirou por inatividade (2 minutos sem uso). Faça login novamente.', 'aviso');
 }
 
 /* ============================================================
@@ -330,10 +343,25 @@ async function init() {
   setupReportsPage(() => authService.getCurrentUser());
   setupProfilePage();
 
-  // Finaliza tela de carregamento inicial
-  const telaCarregando = document.getElementById('tela-carregando');
-  if (telaCarregando) {
-    telaCarregando.style.display = 'none';
+  // Restaura sessão existente caso a página tenha sido recarregada
+  try {
+    const sessao = await authService.restaurarSessao();
+    if (sessao?.expiradoPorInatividade) {
+      toast('Sua sessão expirou por inatividade (2 minutos sem uso).', 'aviso');
+    } else if (sessao?.requiresPasswordChange) {
+      document.getElementById('tela-login').style.display = 'none';
+      document.getElementById('tela-troca-obrigatoria').style.display = 'block';
+    } else if (sessao?.success && sessao.user) {
+      await entrarNoApp(sessao.user);
+    }
+  } catch (err) {
+    console.warn('Erro ao restaurar sessão no carregamento:', err);
+  } finally {
+    // Finaliza tela de carregamento inicial
+    const telaCarregando = document.getElementById('tela-carregando');
+    if (telaCarregando) {
+      telaCarregando.style.display = 'none';
+    }
   }
 }
 
