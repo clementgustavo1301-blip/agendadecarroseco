@@ -303,31 +303,16 @@ class BookingService {
       throw new Error('Apenas quem agendou, o motorista ou um administrador pode excluir o agendamento.');
     }
 
-    // Tenta primeiro via RPC cancelar_agendamento (SECURITY DEFINER para contornar bloqueios de RLS)
     const { data: rpcData, error: rpcError } = await supabase.rpc('cancelar_agendamento', {
       p_booking_id: id,
       p_user_id: currentUser.id
     });
 
-    if (!rpcError) {
-      return true;
+    if (rpcError) {
+      console.error('Erro ao excluir (cancelar) agendamento via RPC:', rpcError);
+      throw new Error(rpcError.message || 'Erro ao excluir (cancelar) o agendamento. Tente atualizar a página ou verificar as permissões.');
     }
 
-    // Fallback: Soft delete via update direto na tabela
-    const { error: updateError } = await supabase
-      .from('bookings')
-      .update({
-        is_deleted: true,
-        deleted_by_id: currentUser.id,
-        deleted_at: new Date().toISOString()
-      })
-      .eq('id', id);
-
-    if (updateError) {
-      console.error('Erro ao excluir no Supabase:', updateError);
-      throw new Error(updateError.message || rpcError.message || 'Erro ao excluir (cancelar) o agendamento.');
-    }
-    
     return true;
   }
 
