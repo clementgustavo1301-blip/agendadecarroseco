@@ -110,7 +110,7 @@ export async function renderAdminAgendamentos(currentUser, { onEditar, onAtualiz
       const id = btn.dataset.id;
       abrirModal(
         'Excluir agendamento',
-        'Tem certeza que deseja excluir este agendamento? Ele deixará de aparecer nas telas normais, mas o administrador mestre continua com o registro no histórico.',
+        'Tem certeza que deseja excluir este agendamento?',
         async () => {
           try {
             await bookingService.excluirAgendamento(id, currentUser);
