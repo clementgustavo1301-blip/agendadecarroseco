@@ -18,9 +18,8 @@ BEGIN
 
     SELECT role INTO v_user_role FROM public.profiles WHERE id = p_user_id;
 
-    -- Permissão: quem criou o agendamento, o motorista ou administrador
+    -- Permissão: quem criou o agendamento ou qualquer tipo de administrador
     IF v_booking.created_by_id <> p_user_id 
-       AND v_booking.driver_id <> p_user_id 
        AND (v_user_role IS NULL OR v_user_role NOT IN ('admin', 'admin_mestre')) THEN
         RAISE EXCEPTION 'Você não tem permissão para excluir este agendamento.';
     END IF;
@@ -44,7 +43,6 @@ CREATE POLICY "Responsáveis ou Administradores podem alterar/cancelar agendamen
     ON public.bookings FOR UPDATE
     USING (
         created_by_id = auth.uid() OR 
-        driver_id = auth.uid() OR
         EXISTS (
             SELECT 1 FROM public.profiles 
             WHERE id = auth.uid() AND role IN ('admin', 'admin_mestre')
@@ -52,7 +50,6 @@ CREATE POLICY "Responsáveis ou Administradores podem alterar/cancelar agendamen
     )
     WITH CHECK (
         created_by_id = auth.uid() OR 
-        driver_id = auth.uid() OR
         EXISTS (
             SELECT 1 FROM public.profiles 
             WHERE id = auth.uid() AND role IN ('admin', 'admin_mestre')

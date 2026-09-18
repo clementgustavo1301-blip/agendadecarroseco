@@ -177,14 +177,20 @@ CREATE POLICY "Usuários autenticados podem criar agendamentos"
     ON public.bookings FOR INSERT
     WITH CHECK (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Responsáveis ou Administrador Mestre podem alterar/cancelar agendamento"
+CREATE POLICY "Criador ou Administradores podem alterar/cancelar agendamento"
     ON public.bookings FOR UPDATE
     USING (
         created_by_id = auth.uid() OR 
-        driver_id = auth.uid() OR
         EXISTS (
             SELECT 1 FROM public.profiles 
-            WHERE id = auth.uid() AND role = 'admin_mestre'
+            WHERE id = auth.uid() AND role IN ('admin', 'admin_mestre')
+        )
+    )
+    WITH CHECK (
+        created_by_id = auth.uid() OR
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role IN ('admin', 'admin_mestre')
         )
     );
 
@@ -393,4 +399,3 @@ BEGIN
     RETURN TRUE;
 END;
 $$;
-

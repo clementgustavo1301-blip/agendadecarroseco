@@ -163,12 +163,10 @@ class BookingService {
     if (!currentUser || !agendamento) return false;
     const currentUserId = String(currentUser.id || '');
     const criadoPorId = String(agendamento.criadoPorId || agendamento.created_by_id || '');
-    const usuarioId = String(agendamento.usuarioId || agendamento.driver_id || '');
 
     return (
       Boolean(currentUser.isAdmin) ||
-      (criadoPorId && criadoPorId === currentUserId) ||
-      (usuarioId && usuarioId === currentUserId)
+      (criadoPorId && criadoPorId === currentUserId)
     );
   }
 
@@ -176,12 +174,10 @@ class BookingService {
     if (!currentUser || !agendamento) return false;
     const currentUserId = String(currentUser.id || '');
     const criadoPorId = String(agendamento.criadoPorId || agendamento.created_by_id || '');
-    const usuarioId = String(agendamento.usuarioId || agendamento.driver_id || '');
 
     return (
       Boolean(currentUser.isAdmin) ||
-      (criadoPorId && criadoPorId === currentUserId) ||
-      (usuarioId && usuarioId === currentUserId)
+      (criadoPorId && criadoPorId === currentUserId)
     );
   }
 
@@ -300,7 +296,7 @@ class BookingService {
     }
 
     if (!this.podeExcluir(agendamento, currentUser)) {
-      throw new Error('Apenas quem agendou, o motorista ou um administrador pode excluir o agendamento.');
+      throw new Error('Apenas quem criou o agendamento ou um administrador pode excluí-lo.');
     }
 
     const { data: rpcData, error: rpcError } = await supabase.rpc('cancelar_agendamento', {
