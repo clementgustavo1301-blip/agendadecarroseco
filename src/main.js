@@ -12,7 +12,8 @@ import {
   setupBookingFormPage,
   popularSelects,
   iniciarEdicaoAgendamento,
-  checarDisponibilidadeLive
+  checarDisponibilidadeLive,
+  estaEditandoAgendamento
 } from './pages/bookingFormPage.js';
 import { renderAdminAgendamentos } from './pages/bookingsAdminPage.js';
 import { renderCarros, setupFleetPage } from './pages/fleetPage.js';
@@ -126,7 +127,11 @@ export async function irPara(pagina) {
       currentUser
     });
   } else if (pagina === 'novo') {
-    await popularSelects(currentUser);
+    if (!estaEditandoAgendamento()) {
+      await prepararFormularioAgendamento(currentUser);
+    } else {
+      await popularSelects(currentUser);
+    }
   } else if (pagina === 'relatorio') {
     const podeVerTudo = currentUser.isAdmin;
     document.getElementById('rel-usuario-campo').style.display = podeVerTudo ? 'block' : 'none';
@@ -136,8 +141,8 @@ export async function irPara(pagina) {
     await renderRelatorio(currentUser);
   } else if (pagina === 'admin') {
     document.getElementById('admin-agend-sub').textContent = currentUser.isAdmin
-      ? 'Aqui estão todas as reservas da frota. Você pode editar ou excluir as que você mesmo agendou; o administrador mestre pode editar ou excluir qualquer uma. Preencha o checklist de saída e devolução de cada viagem sua.'
-      : 'Aqui estão os seus agendamentos. Você pode editar ou excluir os que você mesmo criou ou usa. Preencha o checklist de saída e devolução de cada viagem sua.';
+      ? 'Aqui estão todas as reservas da frota. Como administrador ou quem agendou, você pode editar ou excluir agendamentos. Preencha o checklist de saída e devolução de cada viagem.'
+      : 'Aqui estão os seus agendamentos. Você pode editar ou excluir os agendamentos feitos por você. Preencha o checklist de saída e devolução de cada viagem sua.';
     await renderAdminAgendamentos(currentUser, {
       onEditar: (id) => iniciarEdicaoAgendamento(id, currentUser, irPara),
       onAtualizar: () => irPara('admin')

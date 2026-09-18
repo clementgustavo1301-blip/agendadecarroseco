@@ -30,19 +30,26 @@ export async function renderAdminAgendamentos(currentUser, { onEditar, onAtualiz
     const carro = cars.find(c => c.id === s.carroId);
     const usuario = users.find(u => u.id === s.usuarioId);
     const responsavel = users.find(u => u.id === s.criadoPorId);
-    const podeMexer = bookingService.podeEditarOuExcluir(s, currentUser);
+    const podeEditar = bookingService.podeEditar(s, currentUser);
+    const podeExcluir = bookingService.podeExcluir(s, currentUser);
     const emPeriodoDeUso = new Date(s.inicio) <= agora && new Date(s.fim) >= agora;
     const agendamentoFuturo = new Date(s.inicio) > agora;
 
-    const acoes = podeMexer
-      ? `
-        <button class="icon-btn btn-editar-ag" data-id="${s.id}">Editar</button>
-        <button class="icon-btn perigo btn-excluir-ag" data-id="${s.id}">Excluir</button>
-      `
+    const botoesAcao = [];
+    if (podeEditar) {
+      botoesAcao.push(`<button class="icon-btn btn-editar-ag" data-id="${s.id}">Editar</button>`);
+    }
+    if (podeExcluir) {
+      botoesAcao.push(`<button class="icon-btn perigo btn-excluir-ag" data-id="${s.id}">Excluir</button>`);
+    }
+
+    const acoes = botoesAcao.length > 0
+      ? botoesAcao.join('')
       : '<span class="vazio" style="padding:0;">sem permissão</span>';
 
+    const podeChecklist = podeEditar || podeExcluir;
     let checklistCel;
-    if (!podeMexer) {
+    if (!podeChecklist) {
       checklistCel = '<span class="vazio" style="padding:0;">—</span>';
     } else if (!s.checklistSaida && emPeriodoDeUso) {
       checklistCel = `<button class="icon-btn destaque btn-chk" data-tipo="saida" data-id="${s.id}">Preencher saída</button>`;

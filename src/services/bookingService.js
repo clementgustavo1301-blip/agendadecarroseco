@@ -118,13 +118,22 @@ class BookingService {
     }
   }
 
-  podeEditarOuExcluir(agendamento, currentUser) {
+  podeEditar(agendamento, currentUser) {
     if (!currentUser || !agendamento) return false;
     return (
-      currentUser.isAdminMestre ||
+      currentUser.isAdmin ||
       agendamento.criadoPorId === currentUser.id ||
       agendamento.usuarioId === currentUser.id
     );
+  }
+
+  podeExcluir(agendamento, currentUser) {
+    if (!currentUser || !agendamento) return false;
+    return currentUser.isAdmin || agendamento.criadoPorId === currentUser.id;
+  }
+
+  podeEditarOuExcluir(agendamento, currentUser) {
+    return this.podeEditar(agendamento, currentUser) || this.podeExcluir(agendamento, currentUser);
   }
 
   async salvarAgendamento(dados, editandoId, currentUser) {
@@ -228,6 +237,11 @@ class BookingService {
   }
 
   async excluirAgendamento(id, currentUser) {
+    const agendamento = await this.obterAgendamentoPorId(id);
+    if (!this.podeExcluir(agendamento, currentUser)) {
+      throw new Error('Apenas quem criou o agendamento ou um administrador pode excluí-lo.');
+    }
+
     // Soft delete via is_deleted
     const { error } = await supabase
       .from('bookings')

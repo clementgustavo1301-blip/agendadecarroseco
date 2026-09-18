@@ -133,6 +133,10 @@ export function atualizarModoFormularioAgendamento() {
   }
 }
 
+export function estaEditandoAgendamento() {
+  return Boolean(editandoAgendamentoId);
+}
+
 export async function iniciarEdicaoAgendamento(id, currentUser, onGoToPage) {
   const s = await bookingService.obterAgendamentoPorId(id);
   if (!s) return;
@@ -140,14 +144,14 @@ export async function iniciarEdicaoAgendamento(id, currentUser, onGoToPage) {
     toast('Este agendamento foi excluído e não pode mais ser editado.', 'erro');
     return;
   }
-  if (!bookingService.podeEditarOuExcluir(s, currentUser)) {
-    toast('Só você (quem agendou) ou o administrador mestre pode editar este agendamento.', 'erro');
+  if (!bookingService.podeEditar(s, currentUser)) {
+    toast('Apenas quem agendou ou um administrador pode editar este agendamento.', 'erro');
     return;
   }
 
+  await onGoToPage('novo');
   editandoAgendamentoId = id;
   checklistSaidaExistente = Boolean(s.checklistSaida);
-  onGoToPage('novo');
   await popularSelects(currentUser);
 
   document.getElementById('ag-usuario').value = s.usuarioId;
