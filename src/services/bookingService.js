@@ -11,8 +11,7 @@ class BookingService {
         *,
         vehicles(*),
         driver:profiles!driver_id(*),
-        creator:profiles!created_by_id(*),
-        deleter:profiles!deleted_by_id(*)
+        creator:profiles!created_by_id(*)
       `);
 
     if (!incluirExcluidos) {
@@ -22,14 +21,14 @@ class BookingService {
     const { data, error } = await query;
 
     if (error) {
-      console.error('Erro ao listar agendamentos:', error);
+      console.error('Erro ao listar agendamentos no Supabase:', error);
       return [];
     }
 
     // Buscar os checklists associados
     const { data: checklists } = await supabase.from('checklists').select('*');
 
-    return data.map(b => {
+    return (data || []).map(b => {
       const bChecklists = checklists ? checklists.filter(c => c.booking_id === b.id) : [];
       const saida = bChecklists.find(c => c.type === 'saida');
       const chegada = bChecklists.find(c => c.type === 'devolucao');
@@ -49,7 +48,6 @@ class BookingService {
         criadoEm: b.created_at,
         excluido: Boolean(b.is_deleted),
         excluidoPorId: b.deleted_by_id,
-        excluidoPorNome: b.deleter?.name || null,
         excluidoEm: b.deleted_at,
         checklistSaida: saida ? {
           km: saida.odometer_km,
@@ -76,8 +74,40 @@ class BookingService {
   }
 
   async obterAgendamentoPorId(id) {
-    const schedules = await this.listarAgendamentos();
-    return schedules.find(s => s.id === id) || null;
+    if (!id) return null;
+    const { data: b, error } = await supabase
+      .from('bookings')
+      .select(`
+        *,
+        vehicles(*),
+        driver:profiles!driver_id(*),
+        creator:profiles!created_by_id(*)
+      `)
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error || !b) {
+      const schedules = await this.listarAgendamentos({ incluirExcluidos: true });
+      return schedules.find(s => String(s.id) === String(id)) || null;
+    }
+
+    return {
+      id: b.id,
+      usuarioId: b.driver_id,
+      carroId: b.vehicle_id,
+      inicio: b.start_time,
+      fim: b.end_time,
+      itinerario: b.route_itinerary,
+      objetivo: b.purpose,
+      observacao: b.notes,
+      criadoPorId: b.created_by_id,
+      criadorNome: b.creator?.name || null,
+      motoristaNome: b.driver?.name || null,
+      criadoEm: b.created_at,
+      excluido: Boolean(b.is_deleted),
+      excluidoPorId: b.deleted_by_id,
+      excluidoEm: b.deleted_at
+    };
   }
 
   async obterConflito(carroId, inicioDate, fimDate, excluirId = null) {
@@ -131,16 +161,28 @@ class BookingService {
 
   podeEditar(agendamento, currentUser) {
     if (!currentUser || !agendamento) return false;
+    const currentUserId = String(currentUser.id || '');
+    const criadoPorId = String(agendamento.criadoPorId || agendamento.created_by_id || '');
+    const usuarioId = String(agendamento.usuarioId || agendamento.driver_id || '');
+
     return (
-      currentUser.isAdmin ||
-      agendamento.criadoPorId === currentUser.id ||
-      agendamento.usuarioId === currentUser.id
+      Boolean(currentUser.isAdmin) ||
+      (criadoPorId && criadoPorId === currentUserId) ||
+      (usuarioId && usuarioId === currentUserId)
     );
   }
 
   podeExcluir(agendamento, currentUser) {
     if (!currentUser || !agendamento) return false;
-    return currentUser.isAdmin || agendamento.criadoPorId === currentUser.id;
+    const currentUserId = String(currentUser.id || '');
+    const criadoPorId = String(agendamento.criadoPorId || agendamento.created_by_id || '');
+    const usuarioId = String(agendamento.usuarioId || agendamento.driver_id || '');
+
+    return (
+      Boolean(currentUser.isAdmin) ||
+      (criadoPorId && criadoPorId === currentUserId) ||
+      (usuarioId && usuarioId === currentUserId)
+    );
   }
 
   podeEditarOuExcluir(agendamento, currentUser) {
@@ -248,9 +290,17 @@ class BookingService {
   }
 
   async excluirAgendamento(id, currentUser) {
+    if (!currentUser) {
+      throw new Error('Você precisa estar autenticado para excluir um agendamento.');
+    }
+
     const agendamento = await this.obterAgendamentoPorId(id);
+    if (!agendamento) {
+      throw new Error('Agendamento não encontrado.');
+    }
+
     if (!this.podeExcluir(agendamento, currentUser)) {
-      throw new Error('Apenas quem criou o agendamento ou um administrador pode excluí-lo.');
+      throw new Error('Apenas quem agendou, o motorista ou um administrador pode excluir o agendamento.');
     }
 
     // Soft delete via is_deleted
@@ -264,7 +314,8 @@ class BookingService {
       .eq('id', id);
 
     if (error) {
-      throw new Error('Erro ao excluir (cancelar) o agendamento.');
+      console.error('Erro ao excluir no Supabase:', error);
+      throw new Error(error.message || 'Erro ao excluir (cancelar) o agendamento.');
     }
     
     return true;
