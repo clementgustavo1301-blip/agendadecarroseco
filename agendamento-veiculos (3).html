@@ -1752,7 +1752,7 @@ function excluirAgendamento(id){
   if(!s || s.excluido) return;
   // regra: só o administrador mestre ou quem fez/usa o agendamento pode excluí-lo
   if(!podeEditarOuExcluir(s)){ toast('Só você (quem agendou) ou o administrador mestre pode excluir este agendamento.', 'erro'); return; }
-  abrirModal('Excluir agendamento', 'Tem certeza que deseja excluir este agendamento? Ele deixará de aparecer nas telas normais, mas o administrador mestre continua com o registro no histórico.', async ()=>{
+  abrirModal('Excluir agendamento', 'Tem certeza que deseja excluir este agendamento?', async ()=>{
     // exclusão lógica: mantém o registro para auditoria do administrador mestre
     s.excluido = true;
     s.excluidoPorId = currentUser.id;
