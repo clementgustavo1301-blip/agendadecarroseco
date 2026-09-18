@@ -38,12 +38,12 @@ export async function renderRelatorio(currentUser) {
     let statusCel = '';
     if (colunaStatus) {
       if (s.excluido) {
-        const quemExcluiu = users.find(u => u.id === s.excluidoPorId);
+        const nomeQuemExcluiu = s.excluidoPorNome || users.find(u => u.id === s.excluidoPorId)?.nome;
         statusCel = `
           <td>
             <span class="badge badge-inativo">Excluído</span><br>
             <span style="font-size:.72rem;color:var(--texto-suave);">
-              ${fmtDataHora(s.excluidoEm)}${quemExcluiu ? ' por ' + escapeHtml(quemExcluiu.nome) : ''}
+              ${fmtDataHora(s.excluidoEm)}${nomeQuemExcluiu ? ' por ' + escapeHtml(nomeQuemExcluiu) : ''}
             </span>
           </td>
         `;

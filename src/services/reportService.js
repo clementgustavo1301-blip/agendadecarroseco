@@ -17,13 +17,15 @@ class ReportService {
   }
 
   async filtrarRelatorios({ carroId, usuarioId, dataDe, dataAte }, currentUser) {
-    const schedules = await bookingService.listarAgendamentos();
+    const schedules = await bookingService.listarAgendamentos({
+      incluirExcluidos: Boolean(currentUser?.isAdminMestre)
+    });
 
-    let lista = currentUser.isAdminMestre
+    let lista = currentUser?.isAdminMestre
       ? [...schedules]
       : schedules.filter(s => !s.excluido);
 
-    if (!currentUser.isAdmin) {
+    if (!currentUser?.isAdmin) {
       lista = lista.filter(s => s.usuarioId === currentUser.id || s.criadoPorId === currentUser.id);
     }
     if (carroId) {
@@ -49,7 +51,7 @@ class ReportService {
     const users = await userService.listarUsuarios();
 
     const cabecalho = ['Veiculo', 'Placa', 'Motorista', 'Inicio', 'Fim', 'Itinerario', 'Objetivo', 'Observacao', 'CriadoPor', 'ChecklistSaida', 'ChecklistDevolucao'];
-    if (currentUser.isAdminMestre) cabecalho.push('Status');
+    if (currentUser?.isAdminMestre) cabecalho.push('Status');
 
     const linhas = [cabecalho];
 
@@ -72,10 +74,10 @@ class ReportService {
         this.resumoChecklistChegada(s)
       ];
 
-      if (currentUser.isAdminMestre) {
+      if (currentUser?.isAdminMestre) {
         if (s.excluido) {
-          const quemExcluiu = users.find(u => u.id === s.excluidoPorId);
-          linha.push('Excluído em ' + fmtDataHora(s.excluidoEm) + (quemExcluiu ? ' por ' + quemExcluiu.nome : ''));
+          const quemExcluiu = s.excluidoPorNome || users.find(u => u.id === s.excluidoPorId)?.nome;
+          linha.push('Excluído em ' + fmtDataHora(s.excluidoEm) + (quemExcluiu ? ' por ' + quemExcluiu : ''));
         } else {
           linha.push('Ativo');
         }

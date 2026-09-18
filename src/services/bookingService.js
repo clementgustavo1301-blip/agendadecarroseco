@@ -2,16 +2,24 @@ import { supabase } from './supabaseClient.js';
 import { fmtDataHora } from '../utils/dateUtils.js';
 
 class BookingService {
-  async listarAgendamentos() {
-    const { data, error } = await supabase
+  async listarAgendamentos(opcoes = {}) {
+    const { incluirExcluidos = false } = opcoes;
+
+    let query = supabase
       .from('bookings')
       .select(`
         *,
         vehicles(*),
         driver:profiles!driver_id(*),
-        creator:profiles!created_by_id(*)
-      `)
-      .eq('is_deleted', false);
+        creator:profiles!created_by_id(*),
+        deleter:profiles!deleted_by_id(*)
+      `);
+
+    if (!incluirExcluidos) {
+      query = query.eq('is_deleted', false);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Erro ao listar agendamentos:', error);
@@ -39,7 +47,10 @@ class BookingService {
         criadorNome: b.creator?.name || null,
         motoristaNome: b.driver?.name || null,
         criadoEm: b.created_at,
-        excluido: b.is_deleted,
+        excluido: Boolean(b.is_deleted),
+        excluidoPorId: b.deleted_by_id,
+        excluidoPorNome: b.deleter?.name || null,
+        excluidoEm: b.deleted_at,
         checklistSaida: saida ? {
           km: saida.odometer_km,
           combustivel: saida.fuel,
