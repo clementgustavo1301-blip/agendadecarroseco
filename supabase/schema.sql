@@ -288,6 +288,12 @@ BEGIN
         RAISE EXCEPTION 'Já existe um usuário com esse CPF.';
     END IF;
 
+    -- Limpa uma conta de autenticação órfã deixada por versões antigas da exclusão.
+    -- Sem isso, o e-mail técnico do CPF continuaria bloqueando um novo cadastro.
+    DELETE FROM auth.users au
+    WHERE au.email = fake_email
+      AND NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = au.id);
+
     encrypted_pw := crypt(p_password, gen_salt('bf'));
     new_user_id := gen_random_uuid();
 
@@ -365,6 +371,35 @@ BEGIN
     WHERE id = new_user_id;
 
     RETURN result;
+END;
+$$;
+
+-- Exclui a conta de autenticação, que por cascata remove seu perfil.
+CREATE OR REPLACE FUNCTION public.delete_user(p_target_user_id UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+BEGIN
+    IF NOT public.is_admin_mestre() THEN
+        RAISE EXCEPTION 'Acesso negado: apenas o Administrador Mestre pode excluir usuários.';
+    END IF;
+
+    IF p_target_user_id = auth.uid() THEN
+        RAISE EXCEPTION 'Você não pode excluir a si mesmo.';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM public.profiles WHERE id = p_target_user_id AND role = 'admin_mestre') THEN
+        RAISE EXCEPTION 'O Administrador Mestre não pode ser excluído.';
+    END IF;
+
+    DELETE FROM auth.users WHERE id = p_target_user_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Usuário não encontrado.';
+    END IF;
+
+    RETURN TRUE;
 END;
 $$;
 

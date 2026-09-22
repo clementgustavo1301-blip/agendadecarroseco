@@ -154,13 +154,8 @@ class UserService {
       throw new Error('Você não pode excluir a si mesmo.');
     }
     
-    // A API bloqueia exclusões diretas dependendo da restrição no banco.
-    // O ideal seria soft-delete ou verificar permissão. Como as foreign keys (RESTRICT) bloqueiam se houver histórico,
-    // devemos fazer a chamada de delete.
     const { error } = await supabase
-      .from('profiles')
-      .delete()
-      .eq('id', id);
+      .rpc('delete_user', { p_target_user_id: id });
 
     if (error) {
       if (error.code === '23503') { // Foreign Key Violation
