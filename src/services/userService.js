@@ -101,6 +101,37 @@ class UserService {
     return true;
   }
 
+  async editarUsuario(id, { nome, cpf: cpfInput }) {
+    const cpf = limparCPF(cpfInput);
+    if (!nome?.trim() || cpf.length !== 11) {
+      throw new Error('Informe nome e CPF válido (11 dígitos).');
+    }
+
+    const { data, error } = await supabase.rpc('update_user_profile', {
+      p_target_user_id: id,
+      p_name: nome.trim(),
+      p_cpf: cpf
+    });
+
+    if (error) {
+      if (error.message?.toLowerCase().includes('já existe um usuário com esse cpf')) {
+        throw new Error('Já existe um usuário com esse CPF.');
+      }
+      throw new Error(error.message || 'Erro ao atualizar usuário.');
+    }
+
+    return {
+      id: data.id,
+      nome: data.name,
+      cpf: data.cpf,
+      isAdmin: data.role === 'admin' || data.role === 'admin_mestre',
+      isAdminMestre: data.role === 'admin_mestre',
+      role: data.role,
+      senhaProvisoria: data.requires_password_change,
+      criadoEm: data.created_at
+    };
+  }
+
   async alterarStatusAdmin(id, isAdmin) {
     const role = isAdmin ? 'admin' : 'usuario';
     

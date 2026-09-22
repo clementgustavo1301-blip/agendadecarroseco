@@ -19,6 +19,9 @@ export async function renderUsuarios(currentUser, { onAtualizar }) {
       : (u.isAdmin ? ' <span class="badge badge-admin">Admin</span>' : '');
 
     let acoesRestritas = '';
+    if (currentUser.isAdminMestre) {
+      acoesRestritas += `<button class="icon-btn btn-editar-usr" data-id="${u.id}">Editar dados</button>`;
+    }
     if (currentUser.isAdminMestre && !u.isAdminMestre) {
       acoesRestritas += u.isAdmin
         ? `<button class="icon-btn btn-revogar-admin" data-id="${u.id}">Remover admin</button>`
@@ -66,6 +69,48 @@ export async function renderUsuarios(currentUser, { onAtualizar }) {
           }
         }
       );
+    };
+  });
+
+  tabela.querySelectorAll('.btn-editar-usr').forEach(btn => {
+    btn.onclick = async () => {
+      const user = await userService.obterUsuarioPorId(btn.dataset.id);
+      if (!user) return;
+
+      const fundo = document.createElement('div');
+      fundo.className = 'modal-fundo';
+      fundo.innerHTML = `
+        <div class="modal">
+          <button class="modal-fechar" aria-label="Fechar" title="Fechar">×</button>
+          <h3>Editar usuário</h3>
+          <div class="campo"><label for="editar-usr-nome">Nome</label><input id="editar-usr-nome" value="${escapeHtml(user.nome)}"></div>
+          <div class="campo"><label for="editar-usr-cpf">CPF</label><input id="editar-usr-cpf" maxlength="14" value="${formatCPF(user.cpf)}"></div>
+          <div class="acoes">
+            <button class="btn btn-fantasma btn-cancelar">Cancelar</button>
+            <button class="btn btn-primario btn-confirmar">Salvar</button>
+          </div>
+        </div>`;
+      document.body.appendChild(fundo);
+
+      const fechar = () => fundo.remove();
+      fundo.querySelector('.modal-fechar').onclick = fechar;
+      fundo.querySelector('.btn-cancelar').onclick = fechar;
+      fundo.addEventListener('click', (e) => { if (e.target === fundo) fechar(); });
+      const cpfInput = fundo.querySelector('#editar-usr-cpf');
+      cpfInput.addEventListener('input', (e) => { e.target.value = formatCPF(e.target.value); });
+      fundo.querySelector('.btn-confirmar').onclick = async () => {
+        try {
+          await userService.editarUsuario(user.id, {
+            nome: fundo.querySelector('#editar-usr-nome').value,
+            cpf: cpfInput.value
+          });
+          fechar();
+          toast('Dados do usuário atualizados.', 'sucesso');
+          onAtualizar();
+        } catch (err) {
+          toast(err.message, 'erro');
+        }
+      };
     };
   });
 
