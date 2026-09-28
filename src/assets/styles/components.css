@@ -119,6 +119,21 @@ table.semana td {
   min-width: 120px;
 }
 
+table.semana th:first-child,
+table.semana td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+}
+
+table.semana th:first-child {
+  z-index: 3;
+}
+
+table.semana td:first-child {
+  background: var(--painel);
+}
+
 table.semana td.hoje-col {
   background: #FFF8EA;
 }

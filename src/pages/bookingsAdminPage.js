@@ -39,6 +39,9 @@ export async function renderAdminAgendamentos(currentUser, { onEditar, onAtualiz
     if (podeEditar) {
       botoesAcao.push(`<button class="icon-btn btn-editar-ag" data-id="${s.id}">Editar</button>`);
     }
+    if (podeEditar && new Date(s.fim) > agora) {
+      botoesAcao.push(`<button class="icon-btn destaque btn-liberar-ag" data-id="${s.id}">Liberar</button>`);
+    }
     if (podeExcluir) {
       botoesAcao.push(`<button class="icon-btn perigo btn-excluir-ag" data-id="${s.id}">Excluir</button>`);
     }
@@ -115,6 +118,25 @@ export async function renderAdminAgendamentos(currentUser, { onEditar, onAtualiz
           try {
             await bookingService.excluirAgendamento(id, currentUser);
             toast('Agendamento excluído.', 'sucesso');
+            onAtualizar();
+          } catch (err) {
+            toast(err.message, 'erro');
+          }
+        }
+      );
+    };
+  });
+
+  tabela.querySelectorAll('.btn-liberar-ag').forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.dataset.id;
+      abrirModal(
+        'Liberar veículo',
+        'Isso encerrará o agendamento agora, liberando o veículo para outros. Tem certeza?',
+        async () => {
+          try {
+            await bookingService.liberarAgendamento(id, currentUser);
+            toast('Veículo liberado com sucesso.', 'sucesso');
             onAtualizar();
           } catch (err) {
             toast(err.message, 'erro');

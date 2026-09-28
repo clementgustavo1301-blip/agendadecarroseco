@@ -312,6 +312,42 @@ class BookingService {
     return true;
   }
 
+  async liberarAgendamento(id, currentUser) {
+    if (!currentUser) throw new Error('Você precisa estar autenticado para liberar um veículo.');
+    
+    const agendamento = await this.obterAgendamentoPorId(id);
+    if (!agendamento) throw new Error('Agendamento não encontrado.');
+    if (!this.podeEditarOuExcluir(agendamento, currentUser)) {
+      throw new Error('Sem permissão para liberar este agendamento.');
+    }
+
+    const agora = new Date();
+    const inicioDate = new Date(agendamento.inicio);
+    const fimDate = new Date(agendamento.fim);
+
+    if (agora >= fimDate) {
+        throw new Error('Este agendamento já foi finalizado.');
+    }
+
+    if (agora <= inicioDate) {
+      return this.excluirAgendamento(id, currentUser);
+    }
+
+    const { error } = await supabase
+      .from('bookings')
+      .update({
+        end_time: agora.toISOString(),
+        updated_at: agora.toISOString()
+      })
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(error.message || 'Erro ao liberar veículo.');
+    }
+    
+    return true;
+  }
+
   async salvarChecklist(tipo, agendamentoId, dadosChecklist, currentUser) {
     const { error } = await supabase
       .from('checklists')
